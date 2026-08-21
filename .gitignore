@@ -1,0 +1,51 @@
+# Node
+node_modules/
+.next/
+dist/
+next-env.d.ts
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Dados e artefatos gerados (recriáveis via pipelines — não versionar)
+data-platform/datasets/raw/*
+!data-platform/datasets/raw/.gitkeep
+data-platform/datasets/processed/*
+!data-platform/datasets/processed/.gitkeep
+data-platform/warehouse/*.db
+data-platform/warehouse/*.csv
+data-platform/warehouse/*.json
+data-platform/warehouse/*.joblib
+data-platform/warehouse/_*_run_log.txt
+data-platform/datasets/raw/_download_log.txt
+extracted/*
+!extracted/.gitkeep
+
+# Segredos — nunca versionar
+.env
+.env.local
+apps/api/.env
+infra/docker/.env
+
+# Banco de estado da aplicação (Kanban de retenção, comentários) — gerado em runtime
+apps/api/data/*.db
+apps/api/data/winback_emails.log
+
+# Playwright
+test-results/
+playwright-report/
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Material de origem e artefatos de brainstorm/ideação — não fazem parte do
+# produto entregue, só do processo de escolha do projeto. Não versionar.
+materiais/
+extracted/
+notebooks/
+rascunho.md
+docs/MENTORIA.md

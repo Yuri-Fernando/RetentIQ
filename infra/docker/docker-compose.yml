@@ -1,0 +1,106 @@
+# RetentIQ — stack completa via Docker Compose
+#
+# Sobe Postgres (warehouse real, alternativa ao SQLite de dev), Redis (rate
+# limit / filas), a API e o Web. Rodar da raiz do projeto:
+#
+#   docker compose -f infra/docker/docker-compose.yml up --build
+#
+# PENDENTE: preencha infra/docker/.env (copie de .env.example) com os mesmos
+# segredos usados em apps/api/.env antes de subir em qualquer ambiente real.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: retentiq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-retentiq_dev_password}
+      POSTGRES_DB: retentiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - retentiq_pgdata:/var/lib/postgresql/data
+      - ../../data-platform/warehouse/schema_postgres.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retentiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ../../apps/api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no infra/docker/.env}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-admin@retentiq.dev}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?defina DEMO_ADMIN_PASSWORD}
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: http://localhost:3000
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../../data-platform/warehouse:/app/data-platform/warehouse:ro
+      # Banco de estado do Kanban de retenção (cards + comentários) — gravável e
+      # persistente entre restarts do container (ver apps/api/src/lib/appDb.ts).
+      - retentiq_api_data:/app/data
+
+  worker:
+    build:
+      context: ../../apps/api
+    command: ["node", "dist/queue/winbackWorker.js"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ../../data-platform/warehouse:/app/data-platform/warehouse:ro
+      - retentiq_api_data:/app/data
+
+  web:
+    build:
+      context: ../../apps/web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+
+volumes:
+  retentiq_pgdata:
+  retentiq_api_data:

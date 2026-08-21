@@ -1,0 +1,12 @@
+# RetentIQ — configuração básica do Prometheus (idea "29 — Monitoramento de
+# aplicação" do repertório dev). Assume que a API expõe métricas em /metrics
+# (PENDENTE: adicionar middleware prom-client em apps/api antes de usar em
+# produção — ver docs/HISTORICO.md).
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "retentiq-api"
+    static_configs:
+      - targets: ["api:4000"]
