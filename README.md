@@ -204,5 +204,7 @@ O que falta para considerar o projeto encerrado:
   cada execução em [`docs/HISTORICO.md`](docs/HISTORICO.md).
 
 ## Autor
+Engenheiro de Dados · AI Engineer · Enterprise Automation · IaC · DevOps · Robótica e Automação
 
-Yuri Fernando Dubbern
+[LinkedIn](https://www.linkedin.com/in/yuridubbern) · [GitHub](https://github.com/Yuri-Fernando) · [Lattes](http://lattes.cnpq.br/7151392692642166) · [Linktree](https://linktr.ee/yuri.f.dubbern)
+
