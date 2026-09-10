@@ -44,6 +44,19 @@ jobs:
       - run: npm run build
       - run: npm test --if-present
 
+  platform-messaging:
+    name: platform (messaging + read models CQRS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"          # node:sqlite exige >= 22.5
+      - name: Messaging bus tests
+        run: node platform/messaging/tests/bus.test.js
+      - name: CQRS read model tests
+        run: node platform/read-models/tests/churn_read_model.test.js
+
   web:
     runs-on: ubuntu-latest
     defaults:
