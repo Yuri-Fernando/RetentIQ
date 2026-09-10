@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "retentiq/events/forecast.updated/v1",
+  "title": "forecast.updated",
+  "description": "Emitido quando a previsão de demanda é recalculada. Consumido pelo read model de planejamento e pelo dashboard.",
+  "type": "object",
+  "required": ["event_id", "occurred_at", "sku", "horizon_days", "forecast"],
+  "properties": {
+    "event_id": { "type": "string" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "sku": { "type": "string" },
+    "horizon_days": { "type": "integer", "minimum": 1 },
+    "forecast": { "type": "array", "items": { "type": "number" } }
+  },
+  "additionalProperties": false
+}

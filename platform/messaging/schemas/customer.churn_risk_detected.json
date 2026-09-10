@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "retentiq/events/customer.churn_risk_detected/v1",
+  "title": "customer.churn_risk_detected",
+  "description": "Emitido quando o modelo de churn cruza o limiar para um cliente. Consumido pela automação de retenção e pelo dashboard em tempo real (WebSocket).",
+  "type": "object",
+  "required": ["event_id", "occurred_at", "customer_id", "score"],
+  "properties": {
+    "event_id": { "type": "string" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "customer_id": { "type": "string" },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "top_factors": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

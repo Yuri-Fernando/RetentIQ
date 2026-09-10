@@ -1,12 +1,33 @@
 # RetentIQ
 
-Python · Node.js · TypeScript · Next.js · Express · GraphQL · Machine Learning · SQLite/PostgreSQL · Docker · Prometheus
+Python · Node.js · TypeScript · Next.js · Express · GraphQL · Kafka · RabbitMQ · CQRS · Machine Learning · SQLite/PostgreSQL · Redis · Docker · Prometheus
 
 ## Status
 
 🟡 **Em desenvolvimento** — aplicação completa e funcional localmente (API, dashboard,
 pipeline de dados e modelos de ML todos rodando e testados de ponta a ponta); falta o
 deploy em um provedor de nuvem para ficar acessível publicamente.
+
+Posicionamento no portfólio: **Event-Driven SaaS** — produto distribuído com
+arquitetura orientada a eventos (Kafka + RabbitMQ) e **CQRS**. Ver
+[`docs/event-driven-architecture.md`](docs/event-driven-architecture.md) e
+`docs/adr/`. (Frontend segue Next.js — decisão deliberada, ADR-003.)
+
+### Status das capacidades
+
+| Capacidade | Status |
+|---|---|
+| ETL → Data Warehouse dimensional (Python) | ✅ |
+| ML: churn · previsão de demanda · recomendação | ✅ |
+| API REST + GraphQL + WebSocket (Node/TS) | ✅ |
+| Dashboard Next.js + Kanban de retenção | ✅ |
+| Observabilidade (Prometheus/Grafana) | ✅ |
+| Testes E2E (Playwright) | ✅ |
+| Event-Driven Architecture — abstração de bus + demo | ✅ `platform/messaging/` (InMemoryBus + demo + 4 testes, Node puro) |
+| Schemas de domain events (JSON Schema) | ✅ `platform/messaging/schemas/` |
+| ADRs (Kafka vs RabbitMQ · CQRS · manter Next.js) | ✅ `docs/adr/` |
+| Kafka/RabbitMQ com broker real | 🚧 `KafkaBus`/`RabbitBus` prontos; sem broker/deps no ambiente |
+| Read models CQRS materializados | 🗺️ desenhado (ADR-002); implementação = próximo passo |
 
 ## Descrição geral
 
@@ -174,12 +195,15 @@ apps/
   api/                Node.js + TypeScript + Express — REST + GraphQL + WebSocket
   web/                Next.js + Tailwind + Recharts — dashboard + Kanban de retenção
 
+platform/
+  messaging/          Event-driven: bus (InMemory/Kafka/Rabbit) + schemas + demo + testes
+
 infra/
   docker/              docker-compose.yml (Postgres, Redis, API, Web, Prometheus, Grafana)
   monitoring/          Configuração do Prometheus
 
 tests/e2e/           Testes Playwright (login, dashboard, Kanban de retenção)
-docs/                 Log técnico de decisões e histórico do projeto
+docs/                 Log técnico, histórico, ADRs (docs/adr/), event-driven-architecture.md
 .github/workflows/    CI (lint, build, testes, checagem de qualidade de dados)
 ```
 
