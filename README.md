@@ -26,7 +26,7 @@ arquitetura orientada a eventos (Kafka + RabbitMQ) e **CQRS**. Ver
 | Event-Driven Architecture — abstração de bus + demo | ✅ `platform/messaging/` (InMemoryBus + demo + 4 testes, Node puro) |
 | Schemas de domain events (JSON Schema) | ✅ `platform/messaging/schemas/` |
 | ADRs (Kafka vs RabbitMQ · CQRS · manter Next.js) | ✅ `docs/adr/` |
-| Kafka/RabbitMQ com broker real | 🚧 `KafkaBus`/`RabbitBus` prontos; sem broker/deps no ambiente |
+| Kafka/RabbitMQ com broker real | ✅ testado — `KafkaBus.roundtrip()` / `RabbitBus.consumeOnce()` verdes contra Redpanda + RabbitMQ (Docker). `platform/package.json` declara `kafkajs`/`amqplib`; job `platform-integration` no CI |
 | Read models CQRS materializados | ✅ `platform/read-models/` — `ChurnReadModel` (SQLite embutido do Node) + teste de equivalência **replay ↔ incremental** |
 | CI da camada platform | ✅ job `platform-messaging` no `.github/workflows/ci.yml` (bus + read models) |
 

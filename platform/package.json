@@ -1,0 +1,14 @@
+{
+  "name": "@retentiq/platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Camada event-driven: messaging (Kafka/RabbitMQ) + read models CQRS",
+  "scripts": {
+    "test": "node messaging/tests/bus.test.js && node read-models/tests/churn_read_model.test.js",
+    "test:integration": "node messaging/tests/integration.test.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "amqplib": "^0.10.4"
+  }
+}

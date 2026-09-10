@@ -57,6 +57,38 @@ jobs:
       - name: CQRS read model tests
         run: node platform/read-models/tests/churn_read_model.test.js
 
+  platform-integration:
+    name: platform integration (Kafka + RabbitMQ reais)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      redpanda:
+        image: redpandadata/redpanda:v24.2.7
+        ports: ["9092:9092"]
+        options: >-
+          --health-cmd "rpk cluster health"
+          --health-interval 10s --health-retries 12
+      rabbitmq:
+        image: rabbitmq:3.13
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install brokers client libs
+        working-directory: platform
+        run: npm install --no-audit --no-fund
+      - name: Integration roundtrip (Kafka + RabbitMQ)
+        working-directory: platform
+        env:
+          RUN_INTEGRATION: "1"
+          KAFKAJS_NO_PARTITIONER_WARNING: "1"
+        run: node messaging/tests/integration.test.js
+
   web:
     runs-on: ubuntu-latest
     defaults:
