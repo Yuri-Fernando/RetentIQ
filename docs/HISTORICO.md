@@ -23,6 +23,7 @@ O produto em si segue versionamento semântico simples, marcado nas entradas do 
 | **v2.0.0** | 2026-08-19 | Módulo "Ações de Retenção" (Kanban + chat tempo real + notas estilo Notion), motor de recomendação, GraphQL, fila assíncrona (BullMQ), PWA offline, endpoint `/metrics` (Prometheus), busca/filtro no Kanban. |
 | **v2.0.1** | 2026-08-20 | Retomada pós-falha de sessão: `npm install` das duas apps validado de ponta a ponta (fora do caminho sincronizado), 2 bugs reais de TypeScript corrigidos (`auth.ts`, `dashboard/page.tsx`), configuração de ESLint criada para `apps/api` e `apps/web` (não existia), teste unitário real adicionado (`csv.test.ts`), `.env`/ícones PWA gerados, causa raiz do bloqueio de `npm install` identificada e documentada. |
 | **v2.0.2** | 2026-08-21 | `node_modules` das duas apps materializado **dentro** de `apps/api/` e `apps/web/` (pendência 1 da v2.0.1 resolvida) — `npm run build`/`lint`/`test`/`dev` validados rodando direto na pasta real do projeto. Mais 1 bug real corrigido (`DELETE` de card do Kanban quebrava com clientes que tinham comentário), cache do webpack do Next.js desabilitado (causava crash do build nesta pasta sincronizada), error handler JSON global adicionado na API. |
+| **v2.1.0** | 2026-10-07 | Dois módulos novos de Data Science/FP&A, atendendo gaps de uma auditoria de portfólio: `experimentation/` (A/B testing, power/sample size, CUPED, sequential testing mSPRT, A/B bayesiano, uplift/CATE) e `data-platform/revenue/` (MRR/ARR, GRR/NRR, cohorts de receita, bridge de movimento de MRR, forecast+budget, scenario planner). 56 testes novos (30+26), verificados contra implementações independentes (statsmodels/scipy), simulação Monte Carlo ou casos hand-calculados. Ver `CHANGELOG.md` para o detalhe. |
 
 Nenhuma versão anterior é sobrescrita — o histórico completo de cada uma fica registrado
 no log cronológico abaixo, incluindo o que foi decidido, o que ficou de fora e por quê.
@@ -89,6 +90,80 @@ ficam um pouco mais lentos (recompila do zero sempre), mas funcionam de forma co
 ---
 
 ## Log cronológico
+
+### 2026-10-07 — v2.1.0: `experimentation/` e `data-platform/revenue/` (gaps de auditoria de portfólio)
+
+**Status:** Concluído — 56 testes novos passando, working tree commitada.
+**Autor:** Claude (Sonnet 5)
+
+**Contexto:** uma auditoria de portfólio externa (`Auditoria_Portfolio_Skills_Stacks_Repos_Certificacoes.txt`)
+apontou dois gaps atribuídos ao RetentIQ: (9) "Data Science / Experimentation" —
+faltava experimentação de produto explícita (A/B, power/sample size, CUPED,
+sequential testing, A/B bayesiano, uplift/CATE); (10) "SaaS / FP&A / Revenue" —
+faltavam métricas de receita recorrente (MRR/ARR/GRR/NRR, cohorts, revenue churn,
+expansion/contraction, forecast, budget vs actual, scenario planner).
+
+**Decisão de stack:** ambos os módulos foram implementados em **Python**, não
+TypeScript, apesar de `apps/api`/`apps/web` serem Node/TS. Motivo: são bibliotecas
+de cálculo estatístico/financeiro puro (entram arrays/DataFrames, saem números),
+não endpoints HTTP — e o repo já tem o precedente de `data-platform/ml/` usando
+exatamente as mesmas dependências (`scipy`, `scikit-learn`, `statsmodels`,
+`pandas`) para o mesmo tipo de trabalho. Documentado em
+`experimentation/__init__.py` e `data-platform/revenue/__init__.py`.
+
+**`experimentation/`** (pacote novo na raiz do repo, paralelo a `data-platform/`):
+- `ab_test.py` — teste z de duas proporções (pooled) e Welch's t-test.
+- `power.py` — tamanho de amostra para proporções e médias (fórmula normal padrão).
+- `cuped.py` — redução de variância via covariável pré-experimento.
+- `sequential.py` — mSPRT (Johari et al., "Always Valid Inference") — teste
+  sequencial que permite parar antes do N fixo sem inflar falso-positivo.
+- `bayesian.py` — A/B bayesiano (Beta-Binomial para conversão, Normal para métrica
+  contínua), P(B>A) e intervalo de credibilidade via Monte Carlo.
+- `uplift.py` — T-learner (CATE) usando `RandomForestRegressor`.
+- 30 testes (`experimentation/tests/`), verificados contra `statsmodels`/`scipy`
+  (ex.: `two_proportion_z_test` reproduz `proportions_ztest` do statsmodels a
+  `rel=1e-9`), simulação Monte Carlo (mSPRT: 2000 streams simulados sob H0,
+  taxa de falso-positivo medida ≤ alpha+margem de simulação), e casos
+  hand-calculados (ex.: sample size baseline=20%/MDE=5pp converge para n≈1091,
+  valor publicado pela calculadora de Evan Miller).
+
+**`data-platform/revenue/`** (novo, paralelo a `data-platform/ml/`):
+- `synthetic_subscriptions.py` — gerador de dataset sintético de assinaturas
+  (seed fixa=42, documentado como sintético — o UCI Online Retail II não tem
+  estrutura de assinatura recorrente).
+- `mrr.py`, `bridge.py`, `retention.py`, `cohorts.py`, `forecast.py`, `scenarios.py`
+  — MRR/ARR, bridge de movimento (new/expansion/contraction/churn, reconcilia
+  EXATAMENTE com o MRR observado — verificado em teste para todo mês do dataset
+  sintético, não só num caso isolado), GRR/NRR, cohort de retenção de receita,
+  forecast de tendência linear + budget sintético vs. actual, scenario planner
+  (pessimista/base/otimista via recorrência linear).
+- `run_report.py` — pipeline completo, roda e salva em
+  `data-platform/warehouse/revenue_*` (gitignored, recriável). Execução real:
+  MRR final ≈ $82.787, ARR ≈ $993.444 (1200 clientes sintéticos, 30 meses), GRR
+  médio 95,7%, NRR médio 99,4%, cenário mês 12: pessimista $50.724 / base $77.954
+  / otimista $111.339.
+- 26 testes (`data-platform/tests/`), com a identidade do bridge
+  (`ending = starting + new + expansion + contraction + churn`) verificada
+  exatamente (não aproximadamente) mês a mês, mais casos hand-calculados (3
+  clientes, 2 meses) e invariantes (GRR ≤ 100%, NRR ≥ GRR).
+
+**Bug real encontrado e corrigido:** `pivot[0].dropna() == pytest.approx(1.0)` não
+funciona como comparação elemento-a-elemento numa `Series` do pandas contra
+`pytest.approx` de um escalar (retorna `False` mesmo com valores idênticos) —
+substituído por `np.testing.assert_allclose`.
+
+**O que ficou de fora, deliberadamente** (ver `ROADMAP.md` para a lista completa):
+X-learner/bandits em `experimentation/`; dataset de billing real e
+reativação/win-back em `revenue/`; conexão de qualquer um dos dois módulos à API
+Express/dashboard Next.js existentes (ambos ficam como bibliotecas Python
+standalone, análogas a `data-platform/ml/churn_model.py` gerando CSVs, não como
+rota HTTP nova).
+
+**Validação:** `pytest experimentation/tests data-platform/tests` (executado com o
+Python 3.10 canônico, `C:\Users\Yuri_\AppData\Local\Programs\Python\Python310\python.exe`)
+— 56/56 passando.
+
+---
 
 ### 2026-08-21 — v2.0.2: `node_modules` materializado na pasta real, mais 2 bugs corrigidos
 

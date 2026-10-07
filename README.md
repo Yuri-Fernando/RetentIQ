@@ -29,6 +29,8 @@ arquitetura orientada a eventos (Kafka + RabbitMQ) e **CQRS**. Ver
 | Kafka/RabbitMQ com broker real | ✅ testado — `KafkaBus.roundtrip()` / `RabbitBus.consumeOnce()` verdes contra Redpanda + RabbitMQ (Docker). `platform/package.json` declara `kafkajs`/`amqplib`; job `platform-integration` no CI |
 | Read models CQRS materializados | ✅ `platform/read-models/` — `ChurnReadModel` (SQLite embutido do Node) + teste de equivalência **replay ↔ incremental** |
 | CI da camada platform | ✅ job `platform-messaging` no `.github/workflows/ci.yml` (bus + read models) |
+| Experimentação de produto (A/B, power, CUPED, sequential, Bayesian, uplift) | ✅ `experimentation/` (Python) — 30 testes, verificados contra statsmodels/scipy |
+| Métricas de receita SaaS (MRR/ARR/GRR/NRR, cohorts, bridge, forecast, scenarios) | ✅ `data-platform/revenue/` (Python, dataset sintético) — 26 testes |
 
 ## Descrição geral
 
@@ -114,7 +116,7 @@ UCI Online Retail II (dataset real, 2009–2011)
 
 | Categoria | Tecnologia |
 |---|---|
-| Dados / ML | Python, pandas, scikit-learn (Random Forest), statsmodels (Holt-Winters), pyarrow |
+| Dados / ML | Python, pandas, scikit-learn (Random Forest), statsmodels (Holt-Winters), scipy (testes estatísticos), pyarrow |
 | Data Warehouse | SQLite (dev) / PostgreSQL (schema pronto para produção) |
 | Backend | Node.js, TypeScript, Express, GraphQL (graphql-yoga), Socket.io, BullMQ, Zod |
 | Frontend | Next.js 14 (App Router), React, Tailwind CSS, Recharts, SWR |
@@ -124,7 +126,7 @@ UCI Online Retail II (dataset real, 2009–2011)
 | Infraestrutura | Docker, Docker Compose |
 | Testes | Vitest (unitário), Playwright (E2E) |
 | CI/CD | GitHub Actions |
-| Conceitos | ETL, modelagem dimensional (esquema estrela), validação de qualidade de dados, RFM, séries temporais, sistemas de recomendação, filas assíncronas, WebSocket, GraphQL, PWA, observabilidade |
+| Conceitos | ETL, modelagem dimensional (esquema estrela), validação de qualidade de dados, RFM, séries temporais, sistemas de recomendação, filas assíncronas, WebSocket, GraphQL, PWA, observabilidade, A/B testing, power analysis, CUPED, testes sequenciais (mSPRT), inferência bayesiana, uplift/CATE, MRR/ARR/GRR/NRR, cohort analysis, revenue bridge |
 
 ## Desenvolvimento
 
@@ -191,6 +193,12 @@ data-platform/     Engenharia e Ciência de Dados (Python)
   quality/             Checagens automatizadas de qualidade de dados
   warehouse/            Schema SQL, Data Warehouse e relatórios gerados
   ml/                  Churn, previsão de demanda, motor de recomendação
+  revenue/             MRR/ARR, GRR/NRR, cohorts, bridge de MRR, forecast, scenarios
+                       (dataset sintético de assinaturas — ver docs/HISTORICO.md)
+
+experimentation/   A/B testing, power/sample size, CUPED, sequential testing (mSPRT),
+                   A/B bayesiano, uplift/CATE (Python, standalone — ver seu próprio
+                   docstring de módulo para a decisão de escopo)
 
 apps/
   api/                Node.js + TypeScript + Express — REST + GraphQL + WebSocket
@@ -211,23 +219,21 @@ docs/                 Log técnico, histórico, ADRs (docs/adr/), event-driven-a
 
 ## Próximos passos
 
-O que falta para considerar o projeto encerrado:
-
-- **Deploy em produção** — nenhum provedor foi escolhido/configurado ainda
-  (Vercel/Render/Fly.io etc.); hoje a aplicação roda validada localmente.
-- **Provedor de e-mail real** para a fila de win-back — hoje o envio é simulado (log
-  local); plugar um provedor como Resend/SendGrid.
-- **PostgreSQL em produção** — schema já pronto (`data-platform/warehouse/schema_postgres.sql`)
-  e stack Docker já configurada; falta subir e apontar a aplicação para lá.
-- **Dataset Olist (opcional)** — trocar o dataset do Reino Unido pelo dataset
-  brasileiro Olist, mais comum em portfólios de dados nacionais.
+O que falta para considerar o projeto encerrado está consolidado em
+[`ROADMAP.md`](ROADMAP.md) (deploy em produção, provedor de e-mail real, PostgreSQL
+em produção, dataset Olist opcional, e extensões futuras de `experimentation/` e
+`data-platform/revenue/`).
 
 ## Contexto / Observações
 
 - Projeto de portfólio, 100% público, sem dados ou credenciais reais de terceiros —
-  dataset público (UCI), credenciais de demonstração geradas localmente.
+  dataset público (UCI), credenciais de demonstração geradas localmente;
+  `data-platform/revenue/` usa um dataset sintético próprio (seed fixa), sem relação
+  com o UCI nem com dados de empresas reais.
 - Log técnico completo de decisões, bugs encontrados/corrigidos e resultados reais de
   cada execução em [`docs/HISTORICO.md`](docs/HISTORICO.md).
+- Histórico de versões em [`CHANGELOG.md`](CHANGELOG.md), próximos passos em
+  [`ROADMAP.md`](ROADMAP.md).
 
 ## Autor
 Engenheiro de Dados · AI Engineer · Enterprise Automation · IaC · DevOps · Robótica e Automação
