@@ -4,3 +4,7 @@ statsmodels==0.14.6
 joblib==1.5.2
 pyarrow==22.0.0
 openpyxl>=3.1
+scipy>=1.11
+
+# Dev/test (experimentation/ e data-platform/revenue/)
+pytest>=8.0
