@@ -8,24 +8,90 @@ on:
 
 jobs:
   data-platform:
+    name: data-platform (testes, qualidade, dicionário, schema drift, lint SQL)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: data-platform
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Instalar dependências
-        run: pip install pandas scikit-learn statsmodels joblib pyarrow openpyxl
-      - name: Rodar checks de qualidade (contra warehouse de exemplo, se existir)
+        run: pip install -r data-platform/requirements.txt sqlfluff
+      - name: Lint SQL (sqlfluff — PostgreSQL e SQLite)
         run: |
-          if [ -f warehouse/retentiq.db ]; then
-            python quality/checks.py
-          else
-            echo "warehouse/retentiq.db não versionado (esperado) — pulei os checks no CI."
-          fi
+          sqlfluff lint data-platform/warehouse/schema_postgres.sql data-platform/warehouse/dml_examples.sql \
+            data-platform/warehouse/migrations data-platform/warehouse/security data-platform/warehouse/performance
+          sqlfluff lint --dialect sqlite data-platform/warehouse/schema_sqlite.sql
+      - name: Testes Python (experimentação, revenue, ETL fixture, qualidade, dicionário, engenharia reversa, privacidade)
+        run: python -m pytest experimentation/tests data-platform/tests -q
+      # Antes da v2.2.0 este job PULAVA os checks quando retentiq.db não existia.
+      # Agora o warehouse é construído com a fixture sintética determinística
+      # (sem dado real) e os checks rodam de verdade, com limiar de volume
+      # parametrizado (100 linhas) por ser fixture.
+      - name: ETL com fixture sintética + checks de qualidade
+        run: |
+          python data-platform/ingestion/extract_transform_load.py --fixture --db-path "$RUNNER_TEMP/fixture.db"
+          python data-platform/quality/checks.py --db "$RUNNER_TEMP/fixture.db" --min-rows 100 --report "$RUNNER_TEMP/quality_report.json"
+      - name: Schema drift (modelo versionado x banco gerado)
+        run: |
+          python data-platform/governance/schema_diff.py \
+            --expected docs/data-governance/model/retentiq_sqlite.schema.json \
+            --sqlite "$RUNNER_TEMP/fixture.db" --out-md "$RUNNER_TEMP/schema-diff.md"
+      - name: Dicionário de dados cobre 100% e está atualizado
+        run: python data-platform/governance/export_dictionary.py --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-quality-evidence
+          path: |
+            ${{ runner.temp }}/quality_report.json
+            ${{ runner.temp }}/schema-diff.md
+          if-no-files-found: ignore
+
+  data-model-postgres:
+    name: data-model (PostgreSQL 16 — DDL, CR-001 up/down, papéis, DML)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # banco efêmero do job, acessível só dentro do runner: sem senha
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r data-platform/requirements.txt
+      - name: Laboratório PostgreSQL (bancos descartáveis por teste)
+        env:
+          RETENTIQ_PG_DSN: postgresql://postgres@localhost:5432/postgres
+        run: python -m pytest data-platform/tests/test_postgres_lab.py -v
+
+  security:
+    name: security (dependências Python + segredos/misconfig)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: pip-audit (vulnerabilidades conhecidas nas dependências do data-platform)
+        run: |
+          pip install pip-audit
+          pip-audit -r data-platform/requirements.txt
+      - name: Trivy (segredos e misconfiguration no repositório)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          skip-dirs: "node_modules,apps/api/node_modules,apps/web/node_modules,platform/node_modules"
 
   api:
     runs-on: ubuntu-latest
