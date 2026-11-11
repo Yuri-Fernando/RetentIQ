@@ -1,0 +1,11 @@
+[sqlfluff]
+dialect = postgres
+templater = placeholder
+max_line_length = 140
+# Gate de CI focado em SINTAXE e regras semânticas. Regras puramente de layout e
+# estilo de alias foram desligadas para não reescrever DDL histórico só por estética.
+exclude_rules = LT01, LT02, LT05, LT09, LT14, AL01, AL03, AM04, AM05, ST09, RF04, CP02
+
+[sqlfluff:templater:placeholder]
+param_style = pyformat
+customer_id = 12345
