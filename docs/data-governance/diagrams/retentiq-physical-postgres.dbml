@@ -1,0 +1,78 @@
+// Gerado por data-platform/governance/reverse_engineer.py a partir do catálogo (postgresql).
+// Não editar à mão: regenerar a partir do banco.
+Project retentiq { database_type: 'PostgreSQL' }
+
+Table dim_country {
+  country_id integer [pk]
+  country text [not null, unique]
+}
+
+Table dim_customer {
+  customer_id integer [pk]
+  primary_country text [not null]
+}
+
+Table dim_date {
+  date_id integer [pk]
+  date date [not null]
+  year integer [not null]
+  month integer [not null]
+  day integer [not null]
+  weekday text [not null]
+  is_weekend boolean [not null]
+}
+
+Table dim_product {
+  stock_code text [pk]
+  description text [not null]
+}
+
+Table etl_load_audit {
+  load_id bigint [pk]
+  loaded_at_utc timestamptz [not null]
+  source_name text [not null]
+  source_sha256 text
+  source_rows bigint [not null]
+  dropped_missing_customer bigint [not null]
+  dropped_duplicates bigint [not null]
+  dropped_invalid_sales bigint [not null]
+  fact_sales_rows bigint [not null]
+  fact_cancelled_rows bigint [not null]
+  fact_sales_revenue numeric(16,4) [not null]
+}
+
+Table fact_sales {
+  sale_id bigint [pk]
+  invoice text [not null]
+  stock_code text [not null]
+  customer_id integer [not null]
+  country_id integer [not null]
+  date_id integer [not null]
+  invoice_date timestamp [not null]
+  quantity integer [not null]
+  price numeric(12,4) [not null]
+  revenue numeric(14,4) [not null]
+  indexes {
+    customer_id [name: 'idx_fact_sales_customer']
+    date_id [name: 'idx_fact_sales_date']
+    stock_code [name: 'idx_fact_sales_product']
+  }
+}
+
+Table fact_sales_cancelled {
+  cancel_id bigint [pk]
+  invoice text [not null]
+  stock_code text [not null]
+  customer_id integer [not null]
+  country_id integer
+  date_id integer [not null]
+  invoice_date timestamp [not null]
+  quantity integer [not null]
+  price numeric(12,4) [not null]
+  revenue numeric(14,4) [not null]
+}
+
+Ref: fact_sales.country_id > dim_country.country_id
+Ref: fact_sales.customer_id > dim_customer.customer_id
+Ref: fact_sales.date_id > dim_date.date_id
+Ref: fact_sales.stock_code > dim_product.stock_code

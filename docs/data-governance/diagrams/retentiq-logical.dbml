@@ -1,0 +1,67 @@
+// RetentIQ — modelo LÓGICO DIMENSIONAL (esquema estrela), independente de SGBD.
+// Escrito à mão (é a intenção do modelo). O físico real é extraído do banco:
+//   reverse-engineered.dbml (SQLite) e retentiq-physical-postgres.dbml (PostgreSQL).
+// Tipos lógicos: id, codigo, texto, data, timestamp, inteiro, moeda (decimal exato), booleano.
+// Renderizável em https://dbdiagram.io (colar o conteúdo) ou via @dbml/cli.
+
+Project retentiq_logical {
+  Note: 'Grão de fact_sales: 1 linha de nota (item) de venda válida. Grão de fact_sales_cancelled: 1 linha de nota C.'
+}
+
+Table dim_customer {
+  customer_id id [pk, note: 'chave natural da origem (pseudônimo)']
+  primary_country texto [not null, note: 'país da última linha do cliente na ordem do arquivo']
+}
+
+Table dim_product {
+  stock_code codigo [pk, note: 'chave natural (SKU)']
+  description texto [not null]
+}
+
+Table dim_country {
+  country_id id [pk, note: 'chave substituta']
+  country texto [not null, unique, note: 'chave natural']
+}
+
+Table dim_date {
+  date_id id [pk, note: 'chave inteligente AAAAMMDD']
+  date data [not null]
+  year inteiro [not null]
+  month inteiro [not null]
+  day inteiro [not null]
+  weekday texto [not null]
+  is_weekend booleano [not null]
+}
+
+Table fact_sales {
+  sale_id id [pk, note: 'substituta: a origem não tem chave natural do item']
+  invoice codigo [not null, note: 'dimensão degenerada (pedido)']
+  stock_code codigo [not null]
+  customer_id id [not null]
+  country_id id [not null]
+  date_id id [not null]
+  invoice_date timestamp [not null]
+  quantity inteiro [not null, note: '> 0 — aditiva']
+  price moeda [not null, note: '> 0 — NÃO aditiva (preço unitário)']
+  revenue moeda [not null, note: 'quantity * price — aditiva']
+}
+
+Table fact_sales_cancelled {
+  cancel_id id [pk]
+  invoice codigo [not null, note: 'prefixo C']
+  stock_code codigo [not null, note: 'sem FK: produto pode não ter venda válida']
+  customer_id id [not null, note: 'sem FK: cliente pode não ter venda válida']
+  country_id id [null]
+  date_id id [not null, note: 'sem FK: dia pode não ter venda válida']
+  invoice_date timestamp [not null]
+  quantity inteiro [not null, note: '< 0 na origem']
+  price moeda [not null]
+  revenue moeda [not null, note: '< 0 — somar à receita bruta dá a venda líquida']
+}
+
+Ref: fact_sales.customer_id > dim_customer.customer_id
+Ref: fact_sales.stock_code > dim_product.stock_code
+Ref: fact_sales.country_id > dim_country.country_id
+Ref: fact_sales.date_id > dim_date.date_id
+// relação lógica (lookup no ETL), não declarada fisicamente:
+Ref: fact_sales_cancelled.country_id > dim_country.country_id

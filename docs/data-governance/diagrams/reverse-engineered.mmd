@@ -1,0 +1,63 @@
+erDiagram
+    dim_country {
+        integer country_id PK
+        text country
+    }
+    dim_customer {
+        integer customer_id PK
+        text primary_country
+    }
+    dim_date {
+        timestamp date
+        integer date_id PK
+        integer year
+        integer month
+        integer day
+        text weekday
+        integer is_weekend
+    }
+    dim_product {
+        text stock_code PK
+        text description
+    }
+    etl_load_audit {
+        integer load_id PK
+        text loaded_at_utc
+        text source_name
+        text source_sha256
+        integer source_rows
+        integer dropped_missing_customer
+        integer dropped_duplicates
+        integer dropped_invalid_sales
+        integer fact_sales_rows
+        integer fact_cancelled_rows
+        real fact_sales_revenue
+    }
+    fact_sales {
+        integer sale_id PK
+        text invoice
+        text stock_code FK
+        integer customer_id FK
+        integer country_id FK
+        integer date_id FK
+        timestamp invoice_date
+        integer quantity
+        real price
+        real revenue
+    }
+    fact_sales_cancelled {
+        integer cancel_id PK
+        text invoice
+        text stock_code
+        integer customer_id
+        integer country_id
+        integer date_id
+        timestamp invoice_date
+        integer quantity
+        real price
+        real revenue
+    }
+    dim_country ||--o{ fact_sales : "country_id"
+    dim_customer ||--o{ fact_sales : "customer_id"
+    dim_date ||--o{ fact_sales : "date_id"
+    dim_product ||--o{ fact_sales : "stock_code"

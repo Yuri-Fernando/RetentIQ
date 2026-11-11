@@ -1,0 +1,426 @@
+{
+  "dialect": "sqlite",
+  "tables": {
+    "dim_country": {
+      "checks": 0,
+      "columns": [
+        {
+          "default": null,
+          "name": "country_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "country",
+          "nullable": false,
+          "type": "text"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "country_id"
+      ],
+      "unique": [
+        {
+          "columns": [
+            "country"
+          ]
+        }
+      ]
+    },
+    "dim_customer": {
+      "checks": 1,
+      "columns": [
+        {
+          "default": null,
+          "name": "customer_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "primary_country",
+          "nullable": false,
+          "type": "text"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "customer_id"
+      ],
+      "unique": []
+    },
+    "dim_date": {
+      "checks": 4,
+      "columns": [
+        {
+          "default": null,
+          "name": "date",
+          "nullable": false,
+          "type": "timestamp"
+        },
+        {
+          "default": null,
+          "name": "date_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "year",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "month",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "day",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "weekday",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "is_weekend",
+          "nullable": false,
+          "type": "integer"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "date_id"
+      ],
+      "unique": []
+    },
+    "dim_product": {
+      "checks": 1,
+      "columns": [
+        {
+          "default": null,
+          "name": "stock_code",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "description",
+          "nullable": false,
+          "type": "text"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "stock_code"
+      ],
+      "unique": []
+    },
+    "etl_load_audit": {
+      "checks": 6,
+      "columns": [
+        {
+          "default": null,
+          "name": "load_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "loaded_at_utc",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "source_name",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "source_sha256",
+          "nullable": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "source_rows",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "dropped_missing_customer",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "dropped_duplicates",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "dropped_invalid_sales",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "fact_sales_rows",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "fact_cancelled_rows",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "fact_sales_revenue",
+          "nullable": false,
+          "type": "real"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "load_id"
+      ],
+      "unique": []
+    },
+    "fact_sales": {
+      "checks": 3,
+      "columns": [
+        {
+          "default": null,
+          "name": "sale_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "invoice",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "stock_code",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "customer_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "country_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "date_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "invoice_date",
+          "nullable": false,
+          "type": "timestamp"
+        },
+        {
+          "default": null,
+          "name": "quantity",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "price",
+          "nullable": false,
+          "type": "real"
+        },
+        {
+          "default": null,
+          "name": "revenue",
+          "nullable": false,
+          "type": "real"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "country_id"
+          ],
+          "ref_columns": [
+            "country_id"
+          ],
+          "ref_table": "dim_country"
+        },
+        {
+          "columns": [
+            "customer_id"
+          ],
+          "ref_columns": [
+            "customer_id"
+          ],
+          "ref_table": "dim_customer"
+        },
+        {
+          "columns": [
+            "date_id"
+          ],
+          "ref_columns": [
+            "date_id"
+          ],
+          "ref_table": "dim_date"
+        },
+        {
+          "columns": [
+            "stock_code"
+          ],
+          "ref_columns": [
+            "stock_code"
+          ],
+          "ref_table": "dim_product"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "customer_id"
+          ],
+          "name": "idx_fact_sales_customer",
+          "partial": false,
+          "unique": false
+        },
+        {
+          "columns": [
+            "date_id"
+          ],
+          "name": "idx_fact_sales_date",
+          "partial": false,
+          "unique": false
+        },
+        {
+          "columns": [
+            "stock_code"
+          ],
+          "name": "idx_fact_sales_product",
+          "partial": false,
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "sale_id"
+      ],
+      "unique": []
+    },
+    "fact_sales_cancelled": {
+      "checks": 1,
+      "columns": [
+        {
+          "default": null,
+          "name": "cancel_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "invoice",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "stock_code",
+          "nullable": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "name": "customer_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "country_id",
+          "nullable": true,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "date_id",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "invoice_date",
+          "nullable": false,
+          "type": "timestamp"
+        },
+        {
+          "default": null,
+          "name": "quantity",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "name": "price",
+          "nullable": false,
+          "type": "real"
+        },
+        {
+          "default": null,
+          "name": "revenue",
+          "nullable": false,
+          "type": "real"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "cancel_id"
+      ],
+      "unique": []
+    }
+  },
+  "views": {
+    "vw_customer_kpis": {
+      "columns": [
+        "customer_id",
+        "primary_country",
+        "total_orders",
+        "total_revenue",
+        "first_purchase",
+        "last_purchase"
+      ]
+    }
+  }
+}
