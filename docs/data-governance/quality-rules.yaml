@@ -1,0 +1,132 @@
+# RetentIQ — catálogo de regras de qualidade do warehouse.
+#
+# Implementação: data-platform/quality/checks.py (cada `id` abaixo é o nome
+# exato do CheckResult). O teste data-platform/tests/test_quality_checks.py
+# falha se uma regra existir só no código ou só neste catálogo.
+#
+# Dimensões de qualidade (vocabulário DAMA-DMBOK): completude, validade,
+# unicidade, integridade, consistência, acurácia (reconciliação), atualidade.
+# severity: critical bloqueia pipeline/CI; warning só reporta.
+
+version: 1
+rules:
+  - id: schema.tabelas_esperadas
+    dimension: completude
+    severity: critical
+    rule: "As 6 tabelas do esquema estrela existem."
+  - id: schema.fk_declaradas_fact_sales
+    dimension: integridade
+    severity: warning
+    rule: "fact_sales declara 4 FKs no catálogo (warehouses gerados antes da v2.2.0 não declaram)."
+  - id: schema.fk_sem_violacao
+    dimension: integridade
+    severity: critical
+    rule: "PRAGMA foreign_key_check não retorna violações."
+  - id: fact_sales.customer_id_nao_nulo
+    dimension: completude
+    severity: critical
+    rule: "Nenhuma venda sem cliente."
+  - id: fact_sales.revenue_nao_negativo
+    dimension: validade
+    severity: critical
+    rule: "revenue >= 0 em vendas válidas."
+  - id: fact_sales.quantidade_preco_positivos
+    dimension: validade
+    severity: critical
+    rule: "quantity > 0 e price > 0 em vendas válidas."
+  - id: fact_sales.revenue_igual_qtd_x_preco
+    dimension: consistência
+    severity: critical
+    rule: "|revenue - quantity*price| <= 0,01."
+  - id: fk.fact_sales_customer_id
+    dimension: integridade
+    severity: critical
+    rule: "Todo customer_id de fact_sales existe em dim_customer."
+  - id: fk.fact_sales_stock_code
+    dimension: integridade
+    severity: critical
+    rule: "Todo stock_code de fact_sales existe em dim_product."
+  - id: fk.fact_sales_country_id
+    dimension: integridade
+    severity: critical
+    rule: "Todo country_id de fact_sales existe em dim_country."
+  - id: fk.fact_sales_date_id
+    dimension: integridade
+    severity: critical
+    rule: "Todo date_id de fact_sales existe em dim_date."
+  - id: pk.fact_sales_sale_id_unico
+    dimension: unicidade
+    severity: critical
+    rule: "sale_id único."
+  - id: pk.dim_customer_customer_id_unico
+    dimension: unicidade
+    severity: critical
+    rule: "customer_id único na dimensão."
+  - id: pk.dim_product_stock_code_unico
+    dimension: unicidade
+    severity: critical
+    rule: "stock_code único na dimensão."
+  - id: pk.dim_country_country_id_unico
+    dimension: unicidade
+    severity: critical
+    rule: "country_id único na dimensão."
+  - id: pk.dim_date_date_id_unico
+    dimension: unicidade
+    severity: critical
+    rule: "date_id único na dimensão."
+  - id: datas.sem_venda_futura
+    dimension: validade
+    severity: critical
+    rule: "Nenhuma invoice_date posterior ao instante da checagem (UTC)."
+  - id: datas.date_id_coerente_com_invoice_date
+    dimension: consistência
+    severity: critical
+    rule: "date_id = AAAAMMDD(invoice_date)."
+  - id: cancelamento.invoice_prefixo_c
+    dimension: validade
+    severity: critical
+    rule: "Toda linha de fact_sales_cancelled tem invoice com prefixo 'C'."
+  - id: cancelamento.ausente_em_fact_sales
+    dimension: consistência
+    severity: critical
+    rule: "Nenhuma nota 'C' dentro de fact_sales (evita double counting de receita)."
+  - id: cancelamento.quantidade_negativa
+    dimension: consistência
+    severity: warning
+    rule: "Cancelamentos têm quantidade negativa (semântica da origem)."
+  - id: cancelamento.cliente_sem_venda_valida
+    dimension: integridade
+    severity: warning
+    rule: "Monitora cancelamentos de clientes ausentes em dim_customer (tolerado por decisão de modelo: 129 no dado real)."
+  - id: volume.fact_sales_minimo
+    dimension: completude
+    severity: critical
+    rule: "fact_sales tem mais linhas que o limiar (1000 dado real; 100 fixture do CI)."
+  - id: reconciliacao.linhas_origem
+    dimension: acurácia
+    severity: critical
+    rule: "linhas da origem = descartadas (sem cliente + duplicadas + inválidas) + vendas + cancelamentos."
+  - id: reconciliacao.contagem_fatos
+    dimension: acurácia
+    severity: critical
+    rule: "Contagens gravadas = contagens registradas em etl_load_audit."
+  - id: reconciliacao.receita_total
+    dimension: acurácia
+    severity: critical
+    rule: "SUM(revenue) gravado = soma calculada na transformação (tolerância 0,01)."
+  - id: reconciliacao.auditoria_presente
+    dimension: atualidade
+    severity: warning
+    rule: "Existe registro em etl_load_audit (warehouses antigos não têm)."
+  - id: view.vw_customer_kpis_sem_double_counting
+    dimension: consistência
+    severity: critical
+    rule: "SUM(vw_customer_kpis.total_revenue) = SUM(fact_sales.revenue)."
+  - id: view.vw_customer_kpis_um_por_cliente
+    dimension: unicidade
+    severity: critical
+    rule: "1 linha na view por cliente com venda."
+  - id: view.vw_customer_kpis_presente
+    dimension: completude
+    severity: warning
+    rule: "A view existe no warehouse (warehouses antigos não têm)."

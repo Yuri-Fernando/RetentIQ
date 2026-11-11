@@ -58,6 +58,21 @@ CREATE TABLE IF NOT EXISTS fact_sales_cancelled (
     revenue      NUMERIC(14, 4) NOT NULL
 );
 
+-- Trilha de auditoria das cargas (adicionada na v2.2.0; mesma semântica do SQLite).
+CREATE TABLE IF NOT EXISTS etl_load_audit (
+    load_id                  BIGSERIAL PRIMARY KEY,
+    loaded_at_utc            TIMESTAMPTZ NOT NULL,
+    source_name              TEXT NOT NULL,
+    source_sha256            TEXT,
+    source_rows              BIGINT NOT NULL CHECK (source_rows >= 0),
+    dropped_missing_customer BIGINT NOT NULL CHECK (dropped_missing_customer >= 0),
+    dropped_duplicates       BIGINT NOT NULL CHECK (dropped_duplicates >= 0),
+    dropped_invalid_sales    BIGINT NOT NULL CHECK (dropped_invalid_sales >= 0),
+    fact_sales_rows          BIGINT NOT NULL CHECK (fact_sales_rows >= 0),
+    fact_cancelled_rows      BIGINT NOT NULL CHECK (fact_cancelled_rows >= 0),
+    fact_sales_revenue       NUMERIC(16, 4) NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_fact_sales_customer ON fact_sales(customer_id);
 CREATE INDEX IF NOT EXISTS idx_fact_sales_date     ON fact_sales(date_id);
 CREATE INDEX IF NOT EXISTS idx_fact_sales_product  ON fact_sales(stock_code);
