@@ -50,40 +50,6 @@ arquitetura orientada a eventos (Kafka + RabbitMQ) e **CQRS**. Ver
 
 ---
 
-## 🗄️ Administração e Modelagem de Dados (v2.2.0)
-
-Pacote construído para fechar lacunas demonstráveis de modelagem, metadados,
-controle de mudanças e governança — com código, testes e evidências, não só texto.
-Entrada recomendada: [**matriz de rastreabilidade**](docs/data-governance/TRACEABILITY.md)
-· [**caso técnico**](docs/data-governance/PORTFOLIO_CASE.md).
-
-**O problema real encontrado:** o DDL PostgreSQL dizia ser equivalente ao warehouse
-SQLite criado pelo ETL, mas a comparação dos catálogos mostrou
-[13 diferenças incompatíveis](docs/data-governance/evidence/baseline-v2.1.0-schema-diff.md)
-— nenhuma PK/FK/UNIQUE, view ausente, 34 colunas aceitando NULL. O job de qualidade do
-CI pulava os checks e o ETL imprimia "[OK]" mesmo com check falhando.
-
-| Entrega | Onde | Evidência |
-|---|---|---|
-| Modelo conceitual, lógico (relacional + dimensional: grão, medidas, SCD, double counting) e físico (tipos SQLite × PostgreSQL, `NUMERIC` para dinheiro) | [conceitual](docs/data-governance/conceptual-model.md) · [lógico](docs/data-governance/logical-model.md) · [físico](docs/data-governance/physical-model.md) · [diagramas](docs/data-governance/diagrams/) | DBML validado pelo `@dbml/cli` |
-| Schema físico SQLite explícito (PK, 4 FKs, CHECK, UNIQUE, view, auditoria de carga) | [`schema_sqlite.sql`](data-platform/warehouse/schema_sqlite.sql) | carga do dado real: 793.609 vendas, **0 violações** |
-| Normalização 1FN/2FN/3FN com anomalia real, desnormalização justificada | [análise](docs/data-governance/normalization-analysis.md) · [ADR-004](docs/adr/ADR-004-dimensional-model.md) | 1.232 de 4.950 produtos com >1 descrição no bruto |
-| Dicionário (gerado do catálogo + YAML semântico), glossário, catálogo, linhagem por coluna | [dicionário](docs/data-governance/data-dictionary.csv) · [glossário](docs/data-governance/business-glossary.md) · [catálogo](docs/data-governance/data-catalog.md) · [linhagem](docs/data-governance/data-lineage.md) | `export_dictionary.py --check` no CI |
-| Engenharia reversa (PRAGMA / `pg_catalog`) → JSON/DBML/Mermaid; schema diff classificado com exit 1 | [`governance/`](data-platform/governance/) · [doc](docs/data-governance/reverse-engineering.md) | 5 cenários de drift + restauração testados |
-| Ferramenta CASE open source (`@dbml/cli` 3.14.1) | [evidências](docs/data-governance/evidence/case-tool/) | round trip DBML→SQL→PostgreSQL com diff vazio (exceto view) |
-| Controle de mudanças: CR-001, checklist de revisão, rollback | [processo](docs/data-governance/change-control.md) · [CR-001](docs/data-governance/change-request-example.md) | up/up/down em PostgreSQL 16 |
-| Qualidade: 7 → **30 regras**, reconciliação exata origem→warehouse | [`checks.py`](data-platform/quality/checks.py) · [catálogo de regras](docs/data-governance/quality-rules.yaml) | 1.067.371 = 243.007 + 11.996 + 71 + 793.609 + 18.688 |
-| Classificação/LGPD, menor privilégio, pseudonimização, retenção | [classificação](docs/data-governance/data-classification.md) · [RIPD simplificado](docs/data-governance/privacy-impact-notes.md) · [acesso](docs/data-governance/access-matrix.md) | `test_least_privilege_roles`, `test_privacy.py` |
-| Benchmark com `EXPLAIN (ANALYZE, BUFFERS)` no dado real | [benchmark](docs/data-governance/performance-benchmark.md) | índices cobrindo: 1,7–2,2× em consultas seletivas, 0× em agregações; não adotados |
-| Segurança: STRIDE, riscos, resposta a incidentes, vulnerabilidades, mapeamento ISO 27001/NIST CSF/LGPD/GDPR | [`docs/security/`](docs/security/) | pyarrow com CVE corrigido; containers deixaram de rodar como root |
-| Material de entrevista | [Q&A](docs/data-governance/INTERVIEW_QA.md) | — |
-
-> Tickets, aprovações e papéis de owner/steward são **simulação de processo /
-> laboratório de portfólio**. Não houve uso de SAP PowerDesigner nem homologação em
-> empresa. Ver "o que posso e não posso afirmar" no [caso técnico](docs/data-governance/PORTFOLIO_CASE.md#o-que-posso-e-não-posso-afirmar).
-
----
-
 ## Descrição / Contexto
 
 RetentIQ é uma plataforma full-stack de inteligência de receita e retenção de clientes
@@ -92,6 +58,9 @@ Learning (churn, previsão de demanda, recomendação) → API (REST + GraphQL +
 → dashboard web → observabilidade (Prometheus) → testes automatizados (unitários e
 E2E), mais dois módulos de Data Science/FP&A adicionados na v2.1.0: experimentação de
 produto (`experimentation/`) e métricas de receita recorrente (`data-platform/revenue/`).
+A v2.2.0 acrescenta a camada de **administração e modelagem de dados**: schema físico
+íntegro, dicionário gerado do banco, engenharia reversa, controle de mudanças,
+qualidade no CI, LGPD e segurança.
 
 É um projeto de portfólio, construído para demonstrar competência tanto na construção
 do sistema (autenticação, tempo real, filas, APIs, event-driven/CQRS, testes, CI/CD)
@@ -165,11 +134,16 @@ UCI Online Retail II (dataset real, 2009–2011)
               │
               ▼
    ETL (Python/pandas) — limpeza, deduplicação,
-   modelagem em esquema estrela
+   modelagem em esquema estrela, SHA-256 da origem
               │
               ▼
-   Data Warehouse (SQLite / PostgreSQL)
-   fact_sales · dim_customer · dim_product · dim_country · dim_date
+   Data Warehouse (SQLite / PostgreSQL) — DDL versionado com PK/FK/CHECK
+   fact_sales · fact_sales_cancelled · dim_customer · dim_product ·
+   dim_country · dim_date · etl_load_audit · vw_customer_kpis
+              │
+              ├──► quality/checks.py (30 regras, exit 1) ──► CI
+              ├──► governance/ (engenharia reversa · schema diff ·
+              │                 dicionário · privacidade · benchmark)
               │
       ┌───────┼────────────────┐
       ▼       ▼                ▼
@@ -197,7 +171,9 @@ UCI Online Retail II (dataset real, 2009–2011)
 
 | Módulo | Função | Teste |
 |---|---|---|
-| `data-platform/ingestion/` | ETL xlsx → Data Warehouse dimensional | `quality/checks.py` (7 checagens) |
+| `data-platform/ingestion/` | ETL xlsx (ou fixture sintética) → Data Warehouse dimensional | `test_etl_fixture.py` (13) + `quality/checks.py` (30 regras) |
+| `data-platform/quality/` | 30 regras de qualidade com severidade | `test_quality_checks.py` (9) |
+| `data-platform/governance/` | engenharia reversa, schema diff, dicionário, privacidade, laboratório PostgreSQL, benchmark | `test_reverse_engineering` (11), `test_data_dictionary` (7), `test_privacy` (4), `test_postgres_lab` (6) |
 | `data-platform/ml/` | Churn (RF/RFM), previsão de demanda (Holt-Winters), recomendação | métricas reais (precision/recall/MAE/RMSE) |
 | `experimentation/` | A/B testing, power, CUPED, sequential (mSPRT), Bayesian, uplift (T-learner) | 30 testes vs. `statsmodels`/`scipy`/Monte Carlo |
 | `data-platform/revenue/` | MRR/ARR, GRR/NRR, cohorts, bridge, forecast, scenarios | 26 testes, bridge reconciliado exatamente mês a mês |
@@ -210,10 +186,12 @@ UCI Online Retail II (dataset real, 2009–2011)
 
 ## ⚙️ Funcionamento
 
-1. ETL lê o xlsx do UCI Online Retail II, limpa/deduplica e carrega o Data Warehouse
-   dimensional (SQLite ou PostgreSQL).
-2. `quality/checks.py` roda 7 checagens (schema, nulos, integridade referencial,
-   duplicidade, volume mínimo) com exit code para plugar em CI.
+1. ETL lê o xlsx do UCI Online Retail II (registrando o SHA-256 do arquivo), limpa e
+   deduplica, aplica o DDL físico versionado (`schema_sqlite.sql`) com FKs ativas e
+   carrega dimensões antes dos fatos; grava a trilha `etl_load_audit`.
+2. `quality/checks.py` roda 30 regras (schema, PK/FK, domínios, datas, cancelamentos,
+   reconciliação origem→warehouse, anti-double-counting); o ETL termina com código 1 se
+   uma regra crítica falhar. No CI o mesmo fluxo roda com fixture sintética.
 3. Os modelos de ML (`data-platform/ml/`) leem do warehouse e geram CSVs de churn,
    previsão de demanda e recomendações.
 4. A API (`apps/api`) expõe os dados via REST/GraphQL, emite alertas de churn em tempo
@@ -238,6 +216,86 @@ Dashboard recebe alerta em tempo real
       ↓
 Analista cria card no Kanban de retenção → chat → nota → win-back (fila BullMQ)
 ```
+
+---
+
+## 🗄️ Modelagem e Governança de Dados (v2.2.0)
+
+Pacote de administração e modelagem de dados, com código, testes e evidências — não
+só texto. Entradas recomendadas: [**matriz de rastreabilidade**](docs/data-governance/TRACEABILITY.md)
+(requisito → evidência → teste → status) e [**caso técnico**](docs/data-governance/PORTFOLIO_CASE.md).
+
+### O problema real que motivou a versão
+
+| Achado (v2.1.0) | Como foi descoberto | Consequência |
+|---|---|---|
+| O warehouse SQLite **não tinha PK, FK, UNIQUE, NOT NULL nem a view** `vw_customer_kpis` | engenharia reversa dos catálogos SQLite × PostgreSQL | [13 diferenças incompatíveis](docs/data-governance/evidence/baseline-v2.1.0-schema-diff.md) com o DDL que se dizia "equivalente" |
+| O job de qualidade do CI **pulava** os checks | leitura do `ci.yml` | CI sempre verde sem validar nada |
+| O ETL imprimia "[OK]" **mesmo com check falhando** | leitura do `main()` | falhas de qualidade passavam despercebidas |
+
+### Modelo dimensional (físico, extraído do catálogo)
+
+```mermaid
+erDiagram
+    dim_customer ||--o{ fact_sales : "customer_id"
+    dim_product  ||--o{ fact_sales : "stock_code"
+    dim_country  ||--o{ fact_sales : "country_id"
+    dim_date     ||--o{ fact_sales : "date_id"
+    dim_country  ||--o{ fact_sales_cancelled : "country_id (lookup, sem FK)"
+    fact_sales {
+        integer sale_id PK
+        text invoice "dimensão degenerada"
+        text stock_code FK
+        integer customer_id FK
+        integer country_id FK
+        integer date_id FK
+        timestamp invoice_date
+        integer quantity "CHECK > 0"
+        real price "CHECK > 0 (NUMERIC no PostgreSQL)"
+        real revenue "quantity x price"
+    }
+    fact_sales_cancelled {
+        integer cancel_id PK
+        text invoice "CHECK prefixo C"
+        integer customer_id "sem FK: 129 clientes só aparecem aqui"
+        real revenue "negativa"
+    }
+    etl_load_audit {
+        integer load_id PK
+        text source_sha256
+        integer source_rows
+        real fact_sales_revenue
+    }
+```
+
+**Grão de `fact_sales`:** 1 linha de nota de venda válida. A origem não tem chave
+natural para o item (o mesmo `invoice + produto + preço` se repete em 23.756 grupos),
+por isso `sale_id` é chave substituta. Detalhes em
+[conceitual](docs/data-governance/conceptual-model.md) ·
+[lógico](docs/data-governance/logical-model.md) ·
+[físico](docs/data-governance/physical-model.md) ·
+[diagramas versionados](docs/data-governance/diagrams/).
+
+### Entregas
+
+| Tema | O que foi feito | Onde |
+|---|---|---|
+| Modelagem em 3 níveis | entidades e cardinalidades; chaves natural × substituta; grão, medidas aditivas/não aditivas, SCD, risco de double counting; tipos SQLite × PostgreSQL | [docs/data-governance/](docs/data-governance/README.md) |
+| Schema físico íntegro | PK, 4 FKs, CHECK, UNIQUE, view e auditoria de carga aplicados pelo ETL | [`schema_sqlite.sql`](data-platform/warehouse/schema_sqlite.sql) |
+| Normalização | dependências funcionais medidas, 1FN/2FN/3FN, anomalia real, estrela justificada | [análise](docs/data-governance/normalization-analysis.md) · [ADR-004](docs/adr/ADR-004-dimensional-model.md) |
+| Metadados | dicionário **gerado do catálogo** + glossário + catálogo + linhagem por coluna | [dicionário](docs/data-governance/data-dictionary.csv) · [glossário](docs/data-governance/business-glossary.md) · [linhagem](docs/data-governance/data-lineage.md) |
+| Engenharia reversa e drift | PRAGMA / `pg_catalog` → JSON/DBML/Mermaid; diff classificado com exit 1 | [`governance/`](data-platform/governance/) · [doc](docs/data-governance/reverse-engineering.md) |
+| Ferramenta CASE | `@dbml/cli` 3.14.1 (open source): import, forward engineering, `db2dbml` | [evidências](docs/data-governance/evidence/case-tool/) |
+| Controle de mudanças | CR-001 com up/down idempotentes, checklist, rollback | [processo](docs/data-governance/change-control.md) · [CR-001](docs/data-governance/change-request-example.md) |
+| Qualidade | 7 → 30 regras com severidade e reconciliação | [`checks.py`](data-platform/quality/checks.py) · [regras](docs/data-governance/quality-rules.yaml) |
+| Privacidade e acesso | classificação por coluna, papéis de menor privilégio, pseudonimização HMAC, retenção | [classificação](docs/data-governance/data-classification.md) · [acesso](docs/data-governance/access-matrix.md) · [RIPD](docs/data-governance/privacy-impact-notes.md) |
+| Performance | `EXPLAIN (ANALYZE, BUFFERS)` antes/depois de índices no dado real | [benchmark](docs/data-governance/performance-benchmark.md) |
+| Segurança | STRIDE, riscos, incidentes, vulnerabilidades, ISO 27001/NIST CSF/LGPD/GDPR | [docs/security/](docs/security/) |
+| Entrevista | 22 perguntas com respostas ancoradas no repositório | [Q&A](docs/data-governance/INTERVIEW_QA.md) |
+
+> Tickets, aprovações e papéis de owner/steward são **simulação de processo /
+> laboratório de portfólio**. Não houve uso de SAP PowerDesigner nem homologação em
+> empresa. Resultados medidos estão em [📊 Resultados](#-resultados).
 
 ---
 
@@ -292,7 +350,9 @@ dois subagentes da v2.0.0) em [`docs/HISTORICO.md`](docs/HISTORICO.md).
 | **Dados / ML** | Python, pandas, scikit-learn (Random Forest, T-learner), statsmodels (Holt-Winters, testes estatísticos), scipy, pyarrow |
 | **Experimentação** | `experimentation/` — testes z/t, power analysis, CUPED, mSPRT, A/B bayesiano, uplift/CATE |
 | **FP&A / Revenue** | `data-platform/revenue/` — MRR/ARR, GRR/NRR, cohorts, bridge, forecast, scenario planner |
-| **Data Warehouse** | SQLite (dev) / PostgreSQL (schema pronto para produção) |
+| **Data Warehouse** | SQLite (dev) / PostgreSQL 16 — DDL versionado com PK/FK/CHECK, migração CR-001, papéis de menor privilégio |
+| **Governança de dados** | engenharia reversa por catálogo (PRAGMA, `pg_catalog`), schema diff, dicionário gerado, DBML/Mermaid, `@dbml/cli` (CASE), sqlfluff, PyYAML |
+| **Segurança** | pip-audit, Trivy, pseudonimização HMAC-SHA256, k-anonimato, containers não-root |
 | **Backend** | Node.js, TypeScript, Express, GraphQL (`graphql-yoga`), Socket.io, BullMQ, Zod |
 | **Frontend** | Next.js 14 (App Router), React, Tailwind CSS, Recharts, SWR |
 | **Event-driven / CQRS** | Kafka (via `kafkajs`), RabbitMQ (via `amqplib`), `node:sqlite` (read models) |
@@ -301,55 +361,111 @@ dois subagentes da v2.0.0) em [`docs/HISTORICO.md`](docs/HISTORICO.md).
 | **Observabilidade** | Prometheus, Grafana |
 | **Infraestrutura** | Docker, Docker Compose |
 | **Testes** | pytest, Vitest, Playwright, testes contra broker real (Redpanda/RabbitMQ) |
-| **CI/CD** | GitHub Actions (`ci.yml`, incluindo job `platform-integration`) |
+| **CI/CD** | GitHub Actions (`ci.yml`: `data-platform`, `data-model-postgres`, `security`, `api`, `web`, `platform`, `platform-integration`) |
 | **Conceitos** | ETL, modelagem dimensional, RFM, séries temporais, sistemas de recomendação, event-driven architecture, CQRS, A/B testing, power analysis, CUPED, testes sequenciais, inferência bayesiana, uplift/CATE, MRR/ARR/GRR/NRR, cohort analysis, revenue bridge |
 
 ---
 
 ## 📊 Resultados
 
-**Pipeline principal (dataset real, UCI Online Retail II):**
-- Data Warehouse: 793.609 linhas em `fact_sales`, 5.878 clientes, 4.631 produtos,
-  41 países.
-- Qualidade de dados: 7/7 checagens automatizadas passando.
-- Churn: precision 0,782 / recall 0,791 / F1 0,787 / ROC-AUC 0,813 (janela de 90 dias,
-  5.281 clientes analisados).
-- Previsão de demanda: MAE 13.758 / RMSE 28.347 / MAPE 24,1% (série de 739 dias,
-  holdout de 30 dias).
-- Recomendação: 18.742 pares produto→produto, 17.603 recomendações para 5.878 clientes.
+### Pipeline principal (dataset real, UCI Online Retail II)
 
-**`experimentation/` (v2.1.0, dataset de simulação/Monte Carlo):**
-- 30 testes passando, verificados contra `statsmodels`/`scipy`, simulação Monte Carlo
-  (mSPRT, 2.000 streams sob H0) e casos hand-calculados (sample size baseline 20%/MDE
-  5pp → n≈1.091, igual à calculadora de Evan Miller).
+| Métrica | Valor | Origem |
+|---|---|---|
+| Linhas lidas da origem | 1.067.371 (2 abas) | log do ETL, `etl_load_audit` |
+| Vendas válidas (`fact_sales`) | 793.609 | ETL v2.2.0, 2026-11-10 |
+| Cancelamentos (`fact_sales_cancelled`) | 18.688 | idem |
+| Dimensões | 5.878 clientes · 4.631 produtos · 41 países (40 + `Unspecified`) · 604 dias | idem |
+| Receita bruta | £ 17.685.460,64 (idêntica na view e no fato) | regra `view.vw_customer_kpis_sem_double_counting` |
+| Venda líquida | £ 16.593.393,01 (bruta − £ 1.092.067,63 de estornos) | consulta sobre o warehouse |
+| Churn (Random Forest, janela 90 dias, 5.281 clientes) | precision 0,782 · recall 0,791 · F1 0,787 · ROC-AUC 0,813 | `ml/churn_model.py` |
+| Previsão de demanda (739 dias, holdout 30) | MAE 13.758 · RMSE 28.347 · MAPE 24,1% | `ml/demand_forecast.py` |
+| Recomendação | 18.742 pares produto→produto · 17.603 recomendações para 5.878 clientes | `ml/recommendation.py` |
 
-**`data-platform/revenue/` (v2.1.0, dataset sintético de assinaturas, seed fixa=42,
-1.200 clientes, 30 meses):**
-- **MRR final ≈ $82.787** · **ARR ≈ $993.444**.
-- **GRR médio 95,7%** · **NRR médio 99,4%**.
-- Scenario planner, mês 12: pessimista **$50.724** / base **$77.954** / otimista
-  **$111.339**.
-- 26 testes passando, com a identidade do bridge de MRR
-  (`ending = starting + new + expansion + contraction + churn`) verificada
-  **exatamente** (não aproximadamente) em todo mês do dataset, não só num caso isolado.
+### Carga com o schema físico novo (v2.2.0)
 
-**Total de testes Python re-executados nesta auditoria:** `pytest experimentation/tests
-data-platform/tests` → **56 passed** em 19,35s (Python 3.10 canônico).
+| Verificação | Resultado |
+|---|---|
+| Violações de PK/FK/CHECK na carga completa | **0** (`PRAGMA foreign_key_check` vazio) |
+| Reconciliação origem → warehouse | **1.067.371 = 243.007** sem cliente **+ 11.996** duplicadas **+ 71** inválidas **+ 793.609** vendas **+ 18.688** cancelamentos |
+| Regras de qualidade | **28 OK + 1 aviso esperado** (129 cancelamentos de clientes sem venda válida, sem FK por decisão de modelo) |
+| Diff do warehouse reconstruído × modelo versionado | **0 diferenças** |
+| Diff do warehouse antigo (v2.1.0) × modelo | 13 incompatíveis + 34 nulidades relaxadas ([evidência](docs/data-governance/evidence/baseline-v2.1.0-schema-diff.md)) |
+| Tempo do ETL ponta a ponta (notebook, arquivo no Google Drive) | 8 min 53 s |
 
-Todos os números de `experimentation/` e `data-platform/revenue/` vêm de dados
-**sintéticos** (gerados com seed fixa, documentados como tal) — não representam receita
-real de nenhuma empresa. Ver `## ⚠️ Limitações`.
+### Benchmark de consultas — PostgreSQL 16 local, dado real (mediana de 7 execuções)
+
+| Consulta | Sem índice extra | Com índice cobrindo | Plano |
+|---|---:|---:|---|
+| q1 receita por mês | 469,2 ms | 471,1 ms | Seq Scan → Seq Scan |
+| q2 top 20 clientes | 344,4 ms | 340,9 ms | Seq Scan → Seq Scan |
+| q3 top 20 produtos | 754,9 ms | 780,8 ms | Seq Scan → Seq Scan |
+| q4 cancelamentos por mês | 6,3 ms | 6,2 ms | Seq Scan → Seq Scan |
+| q5 KPI de um cliente | 19,8 ms | **9,2 ms (2,2×)** | Bitmap Heap Scan → Index Only Scan |
+| q6 receita de um mês | 38,3 ms | **23,1 ms (1,7×)** | Index Scan → Index Only Scan |
+
+Os índices cobrindo somam +60 MB (+33% do fato) e só ajudam consultas seletivas, por
+isso **não** foram adotados. Ambiente, custo de escrita e leitura completa no
+[relatório](docs/data-governance/performance-benchmark.md). Demonstração local, não
+benchmark de produção.
+
+### Ferramenta CASE (`@dbml/cli` 3.14.1)
+
+| Fluxo | Resultado |
+|---|---|
+| Importar DDL (`sql2dbml`) | falhou com `IF NOT EXISTS` (bug do parser); sem a cláusula: 7 tabelas, 4 refs |
+| Forward engineering (`dbml2sql` → PostgreSQL 16 → engenharia reversa → diff) | diff vazio, exceto a view (DBML não modela views) |
+| Engenharia reversa do banco vivo (`db2dbml`) | 7 tabelas, 4 refs — igual à extração própria |
+
+### Segurança (varreduras de 2026-11-10)
+
+| Ferramenta | Achado | Tratamento |
+|---|---|---|
+| pip-audit | `pyarrow 22.0.0` — PYSEC-2026-113 | atualizado para 23.0.1 |
+| Trivy | Dockerfiles da API e do web rodando como root (DS-0002, HIGH) | `USER node`; imagem da API rebuildada e verificada |
+| Trivy (segredos) | 0 encontrados | — |
+
+### Módulos de Data Science / FP&A (v2.1.0, dados sintéticos)
+
+| Módulo | Resultado | Como foi verificado |
+|---|---|---|
+| `experimentation/` | 30 testes; sample size (baseline 20%, MDE 5pp) n≈1.091 | contra `statsmodels`/`scipy`, Monte Carlo (mSPRT, 2.000 streams sob H0), casos hand-calculados |
+| `data-platform/revenue/` (seed 42, 1.200 clientes, 30 meses) | MRR final ≈ $82.787 · ARR ≈ $993.444 · GRR médio 95,7% · NRR médio 99,4% | 26 testes; bridge de MRR reconciliado **exatamente** em todo mês |
+| Scenario planner (mês 12) | pessimista $50.724 · base $77.954 · otimista $111.339 | `revenue/scenarios.py` |
+
+### Testes
+
+| Suíte | Testes | Resultado (2026-11-10) |
+|---|---:|---|
+| `experimentation/tests` | 30 | ✅ |
+| `data-platform/tests` — revenue | 26 | ✅ |
+| `data-platform/tests` — ETL, qualidade, dicionário, engenharia reversa, privacidade | 44 | ✅ |
+| `data-platform/tests` — laboratório PostgreSQL 16 | 6 | ✅ |
+| **Total Python** | **106** | **106 passed** |
+| CI do PR #1 (GitHub Actions) | 7 jobs | ✅ todos verdes |
+
+Os números de `experimentation/` e `data-platform/revenue/` vêm de dados
+**sintéticos** (seed fixa) e não representam receita real de nenhuma empresa. Ver
+`## ⚠️ Limitações`.
 
 ---
 
 ## 🖼️ Evidências
 
-Sem screenshots do dashboard ou dos painéis capturados nesta revisão (ambiente sem
-browser interativo durante a sessão de auditoria). As evidências de funcionamento real
-são as saídas de teste/execução citadas em `## 📊 Resultados` e `## 🧠 Validação`: os
-793.609 registros do Data Warehouse, as métricas de ML calculadas sobre o dataset real,
-os 56 testes Python re-executados nesta sessão, e os testes de `platform/messaging`
-contra brokers reais (Redpanda/RabbitMQ via Docker).
+Sem screenshots do dashboard ou dos painéis capturados nesta revisão. As evidências de
+funcionamento real são saídas de teste/execução versionadas:
+
+| Evidência | Arquivo |
+|---|---|
+| Diff do warehouse v2.1.0 × modelo (13 incompatibilidades) | [baseline-v2.1.0-schema-diff.md](docs/data-governance/evidence/baseline-v2.1.0-schema-diff.md) |
+| Diff entre dialetos SQLite × PostgreSQL (só tipos) | [sqlite-vs-postgres-diff.md](docs/data-governance/evidence/sqlite-vs-postgres-diff.md) |
+| Benchmark bruto (planos, buffers, ambiente) | [benchmark-2026-11-10.json](docs/data-governance/evidence/benchmark-2026-11-10.json) |
+| Saídas da ferramenta CASE | [evidence/case-tool/](docs/data-governance/evidence/case-tool/) |
+| Modelos extraídos do catálogo | [model/](docs/data-governance/model/) · [diagrams/](docs/data-governance/diagrams/) |
+| Execuções do CI | [GitHub Actions](https://github.com/Yuri-Fernando/RetentIQ/actions/workflows/ci.yml) |
+
+Também valem como evidência as métricas de ML sobre o dataset real e os testes de
+`platform/messaging` contra brokers reais (Redpanda/RabbitMQ via Docker).
 
 ---
 
@@ -613,10 +729,9 @@ de nuvem e a conexão dos módulos novos ao produto — ambos documentados em
 
 ## 🔗 Projetos Relacionados
 
-Sem dependência técnica direta — RetentIQ é standalone. Para modelagem de dados, o
-[FleetCam](https://github.com/Yuri-Fernando/FleetCam-IoT-Video-Platform) é a evidência
-complementar de **modelo operacional multitenant** (Flyway V1..V11, laboratório de
-upgrade em banco descartável, dicionário, revisão de DDL).
+| Projeto | Relação |
+|---|---|
+| [FleetCam](https://github.com/Yuri-Fernando/FleetCam-IoT-Video-Platform) | evidência complementar de modelagem: **modelo operacional multitenant** (Flyway V1..V11, laboratório de upgrade em banco descartável, dicionário de 100 colunas, revisão de DDL). Sem dependência técnica |
 
 ---
 
