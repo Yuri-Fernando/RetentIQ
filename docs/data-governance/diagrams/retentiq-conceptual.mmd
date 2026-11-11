@@ -1,0 +1,11 @@
+%% RetentIQ — modelo CONCEITUAL (entidades de negócio, sem atributos físicos)
+%% Fonte: Online Retail II (UCI). Ver docs/data-governance/conceptual-model.md
+erDiagram
+    CLIENTE ||--o{ PEDIDO : "faz"
+    PEDIDO ||--|{ ITEM_DE_VENDA : "contém"
+    PRODUTO ||--o{ ITEM_DE_VENDA : "é vendido em"
+    PAIS ||--o{ PEDIDO : "é informado em"
+    DATA ||--o{ PEDIDO : "emitido em"
+    CLIENTE ||--o{ CANCELAMENTO : "solicita"
+    CANCELAMENTO ||--|{ ITEM_CANCELADO : "contém"
+    PRODUTO ||--o{ ITEM_CANCELADO : "é estornado em"

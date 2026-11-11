@@ -11,5 +11,10 @@ ENV NODE_ENV=production
 COPY package.json ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
+# Menor privilégio (Trivy DS-0002): processo roda como o usuário `node` da imagem,
+# não como root. /app/data (banco de estado do Kanban, volume no compose) precisa
+# existir com dono `node` para o volume nomeado herdar a permissão.
+RUN mkdir -p /app/data && chown -R node:node /app/data
+USER node
 EXPOSE 4000
 CMD ["node", "dist/server.js"]

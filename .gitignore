@@ -49,3 +49,6 @@ extracted/
 notebooks/
 rascunho.md
 docs/MENTORIA.md
+# briefings/planos de melhoria recebidos (material de origem, não produto)
+Plano_*.txt
+dbml-error.log

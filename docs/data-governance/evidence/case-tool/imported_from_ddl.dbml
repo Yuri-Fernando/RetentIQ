@@ -1,0 +1,78 @@
+Table "dim_customer" {
+  "customer_id" INTEGER [pk]
+  "primary_country" TEXT [not null]
+}
+
+Table "dim_product" {
+  "stock_code" TEXT [pk]
+  "description" TEXT [not null]
+}
+
+Table "dim_country" {
+  "country_id" SERIAL [pk, increment]
+  "country" TEXT [unique, not null]
+}
+
+Table "dim_date" {
+  "date_id" INTEGER [pk]
+  "date" DATE [not null]
+  "year" INTEGER [not null]
+  "month" INTEGER [not null]
+  "day" INTEGER [not null]
+  "weekday" TEXT [not null]
+  "is_weekend" BOOLEAN [not null]
+}
+
+Table "fact_sales" {
+  "sale_id" BIGINT [pk]
+  "invoice" TEXT [not null]
+  "stock_code" TEXT [not null]
+  "customer_id" INTEGER [not null]
+  "country_id" INTEGER [not null]
+  "date_id" INTEGER [not null]
+  "invoice_date" TIMESTAMP [not null]
+  "quantity" INTEGER [not null]
+  "price" NUMERIC(12,4) [not null]
+  "revenue" NUMERIC(14,4) [not null]
+
+  Indexes {
+    customer_id [name: "idx_fact_sales_customer"]
+    date_id [name: "idx_fact_sales_date"]
+    stock_code [name: "idx_fact_sales_product"]
+  }
+}
+
+Table "fact_sales_cancelled" {
+  "cancel_id" BIGINT [pk]
+  "invoice" TEXT [not null]
+  "stock_code" TEXT [not null]
+  "customer_id" INTEGER [not null]
+  "country_id" INTEGER
+  "date_id" INTEGER [not null]
+  "invoice_date" TIMESTAMP [not null]
+  "quantity" INTEGER [not null]
+  "price" NUMERIC(12,4) [not null]
+  "revenue" NUMERIC(14,4) [not null]
+}
+
+Table "etl_load_audit" {
+  "load_id" BIGSERIAL [pk, increment]
+  "loaded_at_utc" TIMESTAMPTZ [not null]
+  "source_name" TEXT [not null]
+  "source_sha256" TEXT
+  "source_rows" BIGINT [not null]
+  "dropped_missing_customer" BIGINT [not null]
+  "dropped_duplicates" BIGINT [not null]
+  "dropped_invalid_sales" BIGINT [not null]
+  "fact_sales_rows" BIGINT [not null]
+  "fact_cancelled_rows" BIGINT [not null]
+  "fact_sales_revenue" NUMERIC(16,4) [not null]
+}
+
+Ref:"dim_product"."stock_code" < "fact_sales"."stock_code"
+
+Ref:"dim_customer"."customer_id" < "fact_sales"."customer_id"
+
+Ref:"dim_country"."country_id" < "fact_sales"."country_id"
+
+Ref:"dim_date"."date_id" < "fact_sales"."date_id"

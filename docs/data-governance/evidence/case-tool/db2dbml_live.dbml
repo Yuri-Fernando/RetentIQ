@@ -1,0 +1,78 @@
+Table "dim_country" {
+  "country_id" int4 [pk, not null]
+  "country" text [unique, not null]
+}
+
+Table "dim_customer" {
+  "customer_id" int4 [pk, not null]
+  "primary_country" text [not null]
+}
+
+Table "dim_date" {
+  "date_id" int4 [pk, not null]
+  "date" date [not null]
+  "year" int4 [not null]
+  "month" int4 [not null]
+  "day" int4 [not null]
+  "weekday" text [not null]
+  "is_weekend" bool [not null]
+}
+
+Table "dim_product" {
+  "stock_code" text [pk, not null]
+  "description" text [not null]
+}
+
+Table "etl_load_audit" {
+  "load_id" int8 [pk, not null]
+  "loaded_at_utc" timestamptz [not null]
+  "source_name" text [not null]
+  "source_sha256" text
+  "source_rows" int8 [not null]
+  "dropped_missing_customer" int8 [not null]
+  "dropped_duplicates" int8 [not null]
+  "dropped_invalid_sales" int8 [not null]
+  "fact_sales_rows" int8 [not null]
+  "fact_cancelled_rows" int8 [not null]
+  "fact_sales_revenue" numeric(16,4) [not null]
+}
+
+Table "fact_sales" {
+  "sale_id" int8 [pk, not null]
+  "invoice" text [not null]
+  "stock_code" text [not null]
+  "customer_id" int4 [not null]
+  "country_id" int4 [not null]
+  "date_id" int4 [not null]
+  "invoice_date" timestamp [not null]
+  "quantity" int4 [not null]
+  "price" numeric(12,4) [not null]
+  "revenue" numeric(14,4) [not null]
+
+  Indexes {
+    customer_id [type: btree, name: "idx_fact_sales_customer"]
+    date_id [type: btree, name: "idx_fact_sales_date"]
+    stock_code [type: btree, name: "idx_fact_sales_product"]
+  }
+}
+
+Table "fact_sales_cancelled" {
+  "cancel_id" int8 [pk, not null]
+  "invoice" text [not null]
+  "stock_code" text [not null]
+  "customer_id" int4 [not null]
+  "country_id" int4
+  "date_id" int4 [not null]
+  "invoice_date" timestamp [not null]
+  "quantity" int4 [not null]
+  "price" numeric(12,4) [not null]
+  "revenue" numeric(14,4) [not null]
+}
+
+Ref "fact_sales_country_id_fkey":"dim_country"."country_id" < "fact_sales"."country_id"
+
+Ref "fact_sales_customer_id_fkey":"dim_customer"."customer_id" < "fact_sales"."customer_id"
+
+Ref "fact_sales_date_id_fkey":"dim_date"."date_id" < "fact_sales"."date_id"
+
+Ref "fact_sales_stock_code_fkey":"dim_product"."stock_code" < "fact_sales"."stock_code"

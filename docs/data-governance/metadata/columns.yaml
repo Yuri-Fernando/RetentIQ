@@ -1,0 +1,423 @@
+# RetentIQ — metadados SEMÂNTICOS do warehouse (versionados).
+#
+# Os metadados TÉCNICOS (tipo, nulidade, PK, FK, índices) NÃO são escritos aqui:
+# são extraídos do catálogo do banco por data-platform/governance/export_dictionary.py.
+# Este arquivo só guarda o que o banco não sabe: significado, classificação,
+# origem, transformação, papéis responsáveis e regra de qualidade.
+#
+# O teste data-platform/tests/test_data_dictionary.py FALHA se:
+#   - existir coluna física sem entrada aqui (ou entrada sem coluna física);
+#   - faltar descrição/classificação/origem/papel;
+#   - a classificação não estiver em data-classification.md;
+#   - o termo de glossário não existir em business-glossary.md;
+#   - a regra de qualidade citada não existir em quality-rules.yaml.
+#
+# PAPÉIS (owner/steward) SÃO RESPONSABILIDADES SIMULADAS de laboratório de
+# portfólio — não representam pessoas ou times reais de nenhuma empresa.
+
+version: 1
+classifications: [PUBLICO, INTERNO, CONFIDENCIAL, PESSOAL_PSEUDONIMIZADO]
+roles:
+  owner_comercial: "PAPEL SIMULADO — Data Owner (área Comercial/Receita)"
+  owner_produto: "PAPEL SIMULADO — Data Owner (Catálogo de Produtos)"
+  owner_dados: "PAPEL SIMULADO — Data Owner (Plataforma de Dados)"
+  steward: "PAPEL SIMULADO — Data Steward (qualidade e metadados)"
+
+tables:
+  dim_customer:
+    description: "Dimensão de clientes identificados. 1 linha por customer_id com pelo menos uma venda válida."
+    owner_role: owner_comercial
+    steward_role: steward
+    columns:
+      customer_id:
+        description: "Identificador do cliente atribuído pelo varejista de origem. Pseudônimo: não identifica a pessoa sozinho, mas é dado pessoal enquanto existir tabela de correspondência no sistema de origem."
+        classification: PESSOAL_PSEUDONIMIZADO
+        source: "online_retail_II.xlsx :: Customer ID"
+        transformation: "linhas sem Customer ID descartadas; cast float -> int"
+        quality_rule: pk.dim_customer_customer_id_unico
+        glossary: Cliente
+      primary_country:
+        description: "País associado ao cliente: país da ÚLTIMA linha de venda do cliente na ordem do arquivo de origem (não necessariamente a compra mais recente). 13 clientes reais compram de mais de um país."
+        classification: PESSOAL_PSEUDONIMIZADO
+        source: "online_retail_II.xlsx :: Country"
+        transformation: "nulo -> 'Unspecified'; strip; drop_duplicates(customer_id, keep='last')"
+        quality_rule: schema.tabelas_esperadas
+        glossary: País
+
+  dim_product:
+    description: "Dimensão de produtos vendidos. 1 linha por stock_code com pelo menos uma venda válida."
+    owner_role: owner_produto
+    steward_role: steward
+    columns:
+      stock_code:
+        description: "Código do produto (SKU) do varejista; alfanumérico (ex.: 85123A, 79323P). Chave natural da dimensão."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: StockCode"
+        transformation: "cast para texto (evita tipo misto no parquet)"
+        quality_rule: pk.dim_product_stock_code_unico
+        glossary: Produto
+      description:
+        description: "Descrição textual do produto; última descrição observada para o stock_code."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: Description"
+        transformation: "nulo -> 'DESCONHECIDO'; strip; drop_duplicates(stock_code, keep='last')"
+        quality_rule: schema.tabelas_esperadas
+        glossary: Produto
+
+  dim_country:
+    description: "Dimensão de países de entrega/cliente presentes nas vendas válidas."
+    owner_role: owner_comercial
+    steward_role: steward
+    columns:
+      country_id:
+        description: "Chave substituta sequencial do país (gerada no ETL a cada carga completa; não é estável entre cargas)."
+        classification: INTERNO
+        source: "gerado no ETL"
+        transformation: "índice + 1 sobre países distintos das vendas válidas"
+        quality_rule: pk.dim_country_country_id_unico
+        glossary: País
+      country:
+        description: "Nome do país como informado na origem (inglês)."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: Country"
+        transformation: "nulo -> 'Unspecified'; strip; distinct"
+        quality_rule: fk.fact_sales_country_id
+        glossary: País
+
+  dim_date:
+    description: "Dimensão calendário. 1 linha por dia com pelo menos uma venda válida (não é calendário contínuo)."
+    owner_role: owner_dados
+    steward_role: steward
+    columns:
+      date:
+        description: "Data (00:00:00) do dia de venda."
+        classification: PUBLICO
+        source: "online_retail_II.xlsx :: InvoiceDate"
+        transformation: "truncamento para dia"
+        quality_rule: datas.date_id_coerente_com_invoice_date
+        glossary: Data de Venda
+      date_id:
+        description: "Chave inteira inteligente no formato AAAAMMDD."
+        classification: PUBLICO
+        source: "derivado de date"
+        transformation: "strftime('%Y%m%d') -> int"
+        quality_rule: pk.dim_date_date_id_unico
+        glossary: Data de Venda
+      year:
+        description: "Ano civil."
+        classification: PUBLICO
+        source: "derivado de date"
+        transformation: "date.year"
+        quality_rule: schema.tabelas_esperadas
+        glossary: Data de Venda
+      month:
+        description: "Mês civil (1-12)."
+        classification: PUBLICO
+        source: "derivado de date"
+        transformation: "date.month"
+        quality_rule: schema.tabelas_esperadas
+        glossary: Data de Venda
+      day:
+        description: "Dia do mês (1-31)."
+        classification: PUBLICO
+        source: "derivado de date"
+        transformation: "date.day"
+        quality_rule: schema.tabelas_esperadas
+        glossary: Data de Venda
+      weekday:
+        description: "Nome do dia da semana em inglês (Monday..Sunday)."
+        classification: PUBLICO
+        source: "derivado de date"
+        transformation: "date.day_name()"
+        quality_rule: schema.tabelas_esperadas
+        glossary: Data de Venda
+      is_weekend:
+        description: "1 se sábado ou domingo, 0 caso contrário."
+        classification: PUBLICO
+        source: "derivado de date"
+        transformation: "weekday >= 5"
+        quality_rule: schema.tabelas_esperadas
+        glossary: Data de Venda
+
+  fact_sales:
+    description: "Fato de vendas válidas. GRÃO: 1 linha = 1 linha de nota fiscal (invoice line) não cancelada, com cliente identificado e quantidade e preço > 0."
+    owner_role: owner_comercial
+    steward_role: steward
+    columns:
+      sale_id:
+        description: "Chave substituta da linha de venda (sequencial por carga). Necessária porque a origem não tem chave natural única: o mesmo invoice+stock_code+price aparece em linhas distintas."
+        classification: INTERNO
+        source: "gerado no ETL"
+        transformation: "índice + 1"
+        quality_rule: pk.fact_sales_sale_id_unico
+        glossary: Item de Venda
+      invoice:
+        description: "Número da nota/pedido (dimensão degenerada). Agrupa itens de um mesmo pedido."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: Invoice"
+        transformation: "cast texto; notas com prefixo 'C' vão para fact_sales_cancelled"
+        quality_rule: cancelamento.ausente_em_fact_sales
+        glossary: Pedido
+      stock_code:
+        description: "Produto vendido (FK dim_product)."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: StockCode"
+        transformation: "cast texto"
+        quality_rule: fk.fact_sales_stock_code
+        glossary: Produto
+      customer_id:
+        description: "Cliente comprador (FK dim_customer)."
+        classification: PESSOAL_PSEUDONIMIZADO
+        source: "online_retail_II.xlsx :: Customer ID"
+        transformation: "linhas sem cliente descartadas; cast int"
+        quality_rule: fk.fact_sales_customer_id
+        glossary: Cliente
+      country_id:
+        description: "País da linha de venda (FK dim_country). Pode diferir de dim_customer.primary_country."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: Country"
+        transformation: "lookup em dim_country pelo nome"
+        quality_rule: fk.fact_sales_country_id
+        glossary: País
+      date_id:
+        description: "Dia da venda (FK dim_date), derivado de invoice_date."
+        classification: PUBLICO
+        source: "online_retail_II.xlsx :: InvoiceDate"
+        transformation: "strftime('%Y%m%d', invoice_date)"
+        quality_rule: datas.date_id_coerente_com_invoice_date
+        glossary: Data de Venda
+      invoice_date:
+        description: "Data e hora de emissão da nota na origem. O dataset não distingue data de venda de data de processamento: assume-se data de venda."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: InvoiceDate"
+        transformation: "nenhuma (timestamp sem fuso, hora local do varejista)"
+        quality_rule: datas.sem_venda_futura
+        glossary: Data de Venda
+      quantity:
+        description: "Quantidade de unidades vendidas na linha (> 0)."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: Quantity"
+        transformation: "linhas com quantity <= 0 descartadas das vendas válidas"
+        quality_rule: fact_sales.quantidade_preco_positivos
+        glossary: Item de Venda
+      price:
+        description: "Preço unitário em libra esterlina (GBP), > 0. REAL no SQLite; NUMERIC(12,4) no PostgreSQL."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: Price"
+        transformation: "linhas com price <= 0 descartadas das vendas válidas"
+        quality_rule: fact_sales.quantidade_preco_positivos
+        glossary: Receita Bruta
+      revenue:
+        description: "Receita bruta da linha = quantity * price (GBP). Medida aditiva em todas as dimensões."
+        classification: CONFIDENCIAL
+        source: "derivado"
+        transformation: "quantity * price"
+        quality_rule: fact_sales.revenue_igual_qtd_x_preco
+        glossary: Receita Bruta
+
+  fact_sales_cancelled:
+    description: "Fato de cancelamentos/devoluções. GRÃO: 1 linha = 1 linha de nota com prefixo 'C' e cliente identificado. Quantidade e receita negativas. Sem FK para dim_customer/dim_product (há cancelamentos de clientes/produtos sem venda válida)."
+    owner_role: owner_comercial
+    steward_role: steward
+    columns:
+      cancel_id:
+        description: "Chave substituta da linha de cancelamento (sequencial por carga)."
+        classification: INTERNO
+        source: "gerado no ETL"
+        transformation: "índice + 1"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: Cancelamento
+      invoice:
+        description: "Número da nota de cancelamento (prefixo 'C')."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: Invoice"
+        transformation: "cast texto; filtro prefixo 'C'"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: Cancelamento
+      stock_code:
+        description: "Produto cancelado (sem FK: pode não existir em dim_product)."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: StockCode"
+        transformation: "cast texto"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: Produto
+      customer_id:
+        description: "Cliente do cancelamento (sem FK: pode não existir em dim_customer)."
+        classification: PESSOAL_PSEUDONIMIZADO
+        source: "online_retail_II.xlsx :: Customer ID"
+        transformation: "linhas sem cliente descartadas; cast int"
+        quality_rule: cancelamento.cliente_sem_venda_valida
+        glossary: Cliente
+      country_id:
+        description: "País (lookup em dim_country; NULL se o país só aparece em cancelamentos)."
+        classification: INTERNO
+        source: "online_retail_II.xlsx :: Country"
+        transformation: "lookup left join em dim_country"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: País
+      date_id:
+        description: "Dia do cancelamento no formato AAAAMMDD (sem FK: o dia pode não ter venda válida)."
+        classification: PUBLICO
+        source: "online_retail_II.xlsx :: InvoiceDate"
+        transformation: "strftime('%Y%m%d', invoice_date)"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: Data de Venda
+      invoice_date:
+        description: "Data e hora da nota de cancelamento."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: InvoiceDate"
+        transformation: "nenhuma"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: Cancelamento
+      quantity:
+        description: "Quantidade cancelada/devolvida (negativa na origem)."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: Quantity"
+        transformation: "nenhuma"
+        quality_rule: cancelamento.quantidade_negativa
+        glossary: Cancelamento
+      price:
+        description: "Preço unitário da linha cancelada (GBP)."
+        classification: CONFIDENCIAL
+        source: "online_retail_II.xlsx :: Price"
+        transformation: "nenhuma"
+        quality_rule: cancelamento.invoice_prefixo_c
+        glossary: Cancelamento
+      revenue:
+        description: "Receita estornada da linha = quantity * price (negativa)."
+        classification: CONFIDENCIAL
+        source: "derivado"
+        transformation: "quantity * price"
+        quality_rule: cancelamento.quantidade_negativa
+        glossary: Venda Líquida
+
+  etl_load_audit:
+    description: "Trilha de auditoria das cargas do ETL (1 linha por execução): proveniência da origem e contagens para reconciliação."
+    owner_role: owner_dados
+    steward_role: steward
+    columns:
+      load_id:
+        description: "Identificador sequencial da carga."
+        classification: INTERNO
+        source: "gerado no ETL"
+        transformation: "INTEGER PRIMARY KEY (rowid)"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      loaded_at_utc:
+        description: "Instante da carga em UTC (ISO-8601)."
+        classification: INTERNO
+        source: "relógio do executor do ETL"
+        transformation: "datetime.now(UTC)"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      source_name:
+        description: "Nome do arquivo de origem ou identificador da fixture sintética."
+        classification: INTERNO
+        source: "argumento do ETL"
+        transformation: "nenhuma"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      source_sha256:
+        description: "Hash SHA-256 do arquivo bruto (integridade/proveniência). NULL para fixture sintética."
+        classification: INTERNO
+        source: "hashlib.sha256 sobre o .xlsx"
+        transformation: "nenhuma"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      source_rows:
+        description: "Linhas lidas da origem (todas as abas)."
+        classification: INTERNO
+        source: "extract()"
+        transformation: "len(raw)"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      dropped_missing_customer:
+        description: "Linhas descartadas por não terem Customer ID."
+        classification: INTERNO
+        source: "transform()"
+        transformation: "contagem"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      dropped_duplicates:
+        description: "Linhas descartadas por duplicidade exata (todas as colunas iguais)."
+        classification: INTERNO
+        source: "transform()"
+        transformation: "contagem"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      dropped_invalid_sales:
+        description: "Vendas (não cancelamentos) descartadas por quantidade ou preço <= 0."
+        classification: INTERNO
+        source: "transform()"
+        transformation: "contagem"
+        quality_rule: reconciliacao.linhas_origem
+        glossary: Carga
+      fact_sales_rows:
+        description: "Linhas gravadas em fact_sales."
+        classification: INTERNO
+        source: "transform()"
+        transformation: "contagem"
+        quality_rule: reconciliacao.contagem_fatos
+        glossary: Carga
+      fact_cancelled_rows:
+        description: "Linhas gravadas em fact_sales_cancelled."
+        classification: INTERNO
+        source: "transform()"
+        transformation: "contagem"
+        quality_rule: reconciliacao.contagem_fatos
+        glossary: Carga
+      fact_sales_revenue:
+        description: "Soma de revenue calculada na transformação, antes da gravação (controle de reconciliação)."
+        classification: CONFIDENCIAL
+        source: "transform()"
+        transformation: "sum(quantity * price)"
+        quality_rule: reconciliacao.receita_total
+        glossary: Receita Bruta
+
+  vw_customer_kpis:
+    description: "View de KPIs por cliente (camada de consumo declarada; a API atual ainda agrega direto em fact_sales — dívida DT-05). Agrega somente fact_sales: receita BRUTA, não líquida de cancelamentos."
+    owner_role: owner_comercial
+    steward_role: steward
+    columns:
+      customer_id:
+        description: "Cliente (1 linha por cliente com venda válida)."
+        classification: PESSOAL_PSEUDONIMIZADO
+        source: "dim_customer.customer_id"
+        transformation: "GROUP BY"
+        quality_rule: view.vw_customer_kpis_um_por_cliente
+        glossary: Cliente
+      primary_country:
+        description: "País associado ao cliente (ver dim_customer.primary_country)."
+        classification: PESSOAL_PSEUDONIMIZADO
+        source: "dim_customer.primary_country"
+        transformation: "GROUP BY"
+        quality_rule: view.vw_customer_kpis_um_por_cliente
+        glossary: País
+      total_orders:
+        description: "Número de pedidos distintos (COUNT DISTINCT invoice) com venda válida."
+        classification: CONFIDENCIAL
+        source: "fact_sales.invoice"
+        transformation: "COUNT(DISTINCT invoice)"
+        quality_rule: view.vw_customer_kpis_um_por_cliente
+        glossary: Pedido
+      total_revenue:
+        description: "Receita bruta acumulada do cliente (SUM revenue de fact_sales)."
+        classification: CONFIDENCIAL
+        source: "fact_sales.revenue"
+        transformation: "SUM(revenue)"
+        quality_rule: view.vw_customer_kpis_sem_double_counting
+        glossary: Receita Bruta
+      first_purchase:
+        description: "Primeira compra válida do cliente."
+        classification: CONFIDENCIAL
+        source: "fact_sales.invoice_date"
+        transformation: "MIN(invoice_date)"
+        quality_rule: view.vw_customer_kpis_um_por_cliente
+        glossary: Data de Venda
+      last_purchase:
+        description: "Última compra válida do cliente (base da recência/churn)."
+        classification: CONFIDENCIAL
+        source: "fact_sales.invoice_date"
+        transformation: "MAX(invoice_date)"
+        quality_rule: view.vw_customer_kpis_um_por_cliente
+        glossary: Data de Venda
