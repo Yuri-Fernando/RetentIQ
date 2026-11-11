@@ -85,13 +85,13 @@ jobs:
           pip install pip-audit
           pip-audit -r data-platform/requirements.txt
       - name: Trivy (segredos e misconfiguration no repositório)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scanners: secret,misconfig
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          skip-dirs: "node_modules,apps/api/node_modules,apps/web/node_modules,platform/node_modules"
+        # imagem oficial com versão fixada (mesma usada na avaliação local de 2026-11-10)
+        run: |
+          docker run --rm -v "$PWD:/src" aquasec/trivy:0.75.0 fs \
+            --scanners secret,misconfig --severity HIGH,CRITICAL --exit-code 1 \
+            --skip-dirs /src/node_modules --skip-dirs /src/apps/api/node_modules \
+            --skip-dirs /src/apps/web/node_modules --skip-dirs /src/platform/node_modules \
+            /src
 
   api:
     runs-on: ubuntu-latest
