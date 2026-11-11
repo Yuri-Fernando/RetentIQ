@@ -23,6 +23,7 @@ O produto em si segue versionamento semântico simples, marcado nas entradas do 
 | **v2.0.0** | 2026-08-19 | Módulo "Ações de Retenção" (Kanban + chat tempo real + notas estilo Notion), motor de recomendação, GraphQL, fila assíncrona (BullMQ), PWA offline, endpoint `/metrics` (Prometheus), busca/filtro no Kanban. |
 | **v2.0.1** | 2026-08-20 | Retomada pós-falha de sessão: `npm install` das duas apps validado de ponta a ponta (fora do caminho sincronizado), 2 bugs reais de TypeScript corrigidos (`auth.ts`, `dashboard/page.tsx`), configuração de ESLint criada para `apps/api` e `apps/web` (não existia), teste unitário real adicionado (`csv.test.ts`), `.env`/ícones PWA gerados, causa raiz do bloqueio de `npm install` identificada e documentada. |
 | **v2.0.2** | 2026-08-21 | `node_modules` das duas apps materializado **dentro** de `apps/api/` e `apps/web/` (pendência 1 da v2.0.1 resolvida) — `npm run build`/`lint`/`test`/`dev` validados rodando direto na pasta real do projeto. Mais 1 bug real corrigido (`DELETE` de card do Kanban quebrava com clientes que tinham comentário), cache do webpack do Next.js desabilitado (causava crash do build nesta pasta sincronizada), error handler JSON global adicionado na API. |
+| **v2.2.0** | 2026-11-10 | Administração e modelagem de dados: schema físico SQLite com PK/FK/CHECK/view, auditoria de carga, 30 regras de qualidade no CI (antes pulado), dicionário gerado do catálogo, glossário, linhagem, engenharia reversa, schema diff, ferramenta CASE (`@dbml/cli`), CR-001 com rollback, papéis PostgreSQL, pseudonimização, benchmark e segurança. 50 testes novos. |
 | **v2.1.0** | 2026-10-07 | Dois módulos novos de Data Science/FP&A, atendendo gaps de uma auditoria de portfólio: `experimentation/` (A/B testing, power/sample size, CUPED, sequential testing mSPRT, A/B bayesiano, uplift/CATE) e `data-platform/revenue/` (MRR/ARR, GRR/NRR, cohorts de receita, bridge de movimento de MRR, forecast+budget, scenario planner). 56 testes novos (30+26), verificados contra implementações independentes (statsmodels/scipy), simulação Monte Carlo ou casos hand-calculados. Ver `CHANGELOG.md` para o detalhe. |
 
 Nenhuma versão anterior é sobrescrita — o histórico completo de cada uma fica registrado
@@ -90,6 +91,55 @@ ficam um pouco mais lentos (recompila do zero sempre), mas funcionam de forma co
 ---
 
 ## Log cronológico
+
+### 2026-11-10 — v2.2.0: administração e modelagem de dados + segurança
+
+**Status:** Concluído localmente — 106/106 testes Python (56 + 50 novos, 6 contra
+PostgreSQL 16); branch `feat/data-model-governance`.
+**Autor:** Claude (Opus 5.5)
+
+**Contexto:** briefing `Plano_Melhoria_Modelagem_Dados_RetentIQ_FleetCam.txt` pediu
+fechar lacunas demonstráveis de modelagem (3 níveis), normalização, DDL/DML, controle
+de mudanças, dicionário/glossário/catálogo, CASE/engenharia reversa, qualidade,
+LGPD e performance, sem alegar experiência que não existe; o usuário pediu também
+aplicar segurança cibernética de forma prática.
+
+**Baseline (Fase 0):** 56/56 testes. Engenharia reversa do `retentiq.db` existente
+mostrou que o SQLite **não tinha PK, FK, UNIQUE, NOT NULL nem a view** — divergindo
+do DDL PostgreSQL que se dizia equivalente (13 incompatibilidades, arquivado em
+`docs/data-governance/evidence/baseline-v2.1.0-schema-diff.md`). O job de qualidade do
+CI pulava os checks e o `main()` do ETL ignorava falhas.
+
+**Decisões:**
+- Schema físico explícito (`schema_sqlite.sql`) mantendo nomes e tipos declarados do
+  pandas (sem quebrar API/ML); só restrições que o dado real já satisfaz.
+- Sem FK em `fact_sales_cancelled` (129 clientes e 37 produtos reais só aparecem em
+  cancelamentos) — monitorado por regra de aviso.
+- Índices cobrindo medidos e **não** adotados (ganho só em consultas de 20–40 ms; +60 MB).
+- CR-001 como migração separada (up/down) em vez de mudar o DDL base.
+- Proposta de dicionário: técnico extraído do catálogo; semântico em YAML validado.
+
+**Resultados reais:**
+- ETL completo no dado real com o novo schema: 8 min 53 s; 793.609 vendas, 18.688
+  cancelamentos; 0 violações; reconciliação exata 1.067.371 = 243.007 + 11.996 + 71 +
+  793.609 + 18.688; receita bruta £ 17.685.460,64 igual na view e no fato.
+- Benchmark PostgreSQL 16 local: q5 19,8→9,2 ms, q6 38,3→23,1 ms com índices cobrindo;
+  agregações completas sem ganho.
+- `@dbml/cli` 3.14.1: import de DDL falha com `IF NOT EXISTS` (bug do parser); sem a
+  cláusula, 7 tabelas/4 refs; forward engineering aplicado em PG com diff vazio
+  (exceto view); `db2dbml` no banco vivo igual à extração própria.
+- Segurança: pip-audit → pyarrow 22.0.0 com PYSEC-2026-113 (→ 23.0.1); Trivy → 2 HIGH
+  (containers root) corrigidos com `USER node`; imagem da API rebuildada e validada
+  (usuário `node`, `/app/data` gravável). Imagem do web **não** rebuildada.
+
+**Achados inesperados:** a API não usa `vw_customer_kpis` (DT-05); `stock_code` não
+tem variação de caixa (hipótese descartada após medir); 1.232 de 4.950 produtos têm
+mais de uma descrição no bruto.
+
+**Pendências:** DT-01..05, CR-001 no DDL base, `pgaudit`, lockfiles Node + `npm audit`,
+build do web com `USER node` no CI/compose, CI remoto (verificar após push).
+
+---
 
 ### 2026-10-07 — v2.1.0: `experimentation/` e `data-platform/revenue/` (gaps de auditoria de portfólio)
 

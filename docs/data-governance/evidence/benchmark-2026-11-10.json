@@ -1,0 +1,183 @@
+{
+  "environment": {
+    "postgres": "16.15",
+    "shared_buffers": "128MB",
+    "work_mem": "4MB",
+    "host_os": "Windows-10-10.0.26300-SP0",
+    "python": "3.10.8",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel"
+  },
+  "volume": {
+    "dim_customer": 5878,
+    "dim_product": 4631,
+    "dim_country": 41,
+    "dim_date": 604,
+    "fact_sales": 793609,
+    "fact_sales_cancelled": 18688,
+    "etl_load_audit": 1
+  },
+  "initial_load_seconds": 283.43,
+  "runs_per_query": 7,
+  "candidate_indexes": [
+    "CREATE INDEX idx_fact_sales_date_cover ON fact_sales (date_id) INCLUDE (revenue)",
+    "CREATE INDEX idx_fact_sales_customer_cover ON fact_sales (customer_id) INCLUDE (invoice, revenue, invoice_date)",
+    "CREATE INDEX idx_fact_cancelled_date ON fact_sales_cancelled (date_id) INCLUDE (revenue)"
+  ],
+  "index_sizes": {
+    "idx_fact_cancelled_date": "592 kB",
+    "idx_fact_sales_customer": "7296 kB",
+    "idx_fact_sales_customer_cover": "36 MB",
+    "idx_fact_sales_date": "6568 kB",
+    "idx_fact_sales_date_cover": "24 MB",
+    "idx_fact_sales_product": "7264 kB"
+  },
+  "fact_sales_total_size_with_indexes": "183 MB",
+  "baseline": {
+    "q1_receita_por_mes": {
+      "median_ms": 469.166,
+      "min_ms": 438.882,
+      "max_ms": 521.389,
+      "scans": [
+        "Seq Scan on fact_sales",
+        "Seq Scan on dim_date"
+      ],
+      "shared_hit": 9539,
+      "shared_read": 0,
+      "rows": 25
+    },
+    "q2_top_clientes": {
+      "median_ms": 344.402,
+      "min_ms": 323.772,
+      "max_ms": 417.48,
+      "scans": [
+        "Seq Scan on fact_sales"
+      ],
+      "shared_hit": 9504,
+      "shared_read": 0,
+      "rows": 20
+    },
+    "q3_top_produtos": {
+      "median_ms": 754.858,
+      "min_ms": 702.154,
+      "max_ms": 887.989,
+      "scans": [
+        "Seq Scan on fact_sales",
+        "Seq Scan on dim_product"
+      ],
+      "shared_hit": 9624,
+      "shared_read": 0,
+      "rows": 20
+    },
+    "q4_tendencia_cancelamentos": {
+      "median_ms": 6.31,
+      "min_ms": 5.83,
+      "max_ms": 10.659,
+      "scans": [
+        "Seq Scan on fact_sales_cancelled"
+      ],
+      "shared_hit": 226,
+      "shared_read": 0,
+      "rows": 25
+    },
+    "q5_kpi_de_um_cliente": {
+      "median_ms": 19.796,
+      "min_ms": 9.684,
+      "max_ms": 25.332,
+      "scans": [
+        "Index Scan on dim_customer using dim_customer_pkey",
+        "Bitmap Heap Scan on fact_sales",
+        "Bitmap Index Scan using idx_fact_sales_customer"
+      ],
+      "shared_hit": 516,
+      "shared_read": 0,
+      "rows": 1
+    },
+    "q6_receita_de_um_mes": {
+      "median_ms": 38.297,
+      "min_ms": 25.49,
+      "max_ms": 38.979,
+      "scans": [
+        "Index Scan on fact_sales using idx_fact_sales_date"
+      ],
+      "shared_hit": 821,
+      "shared_read": 0,
+      "rows": 1
+    }
+  },
+  "with_candidate_indexes": {
+    "q1_receita_por_mes": {
+      "median_ms": 471.116,
+      "min_ms": 411.107,
+      "max_ms": 574.002,
+      "scans": [
+        "Seq Scan on fact_sales",
+        "Seq Scan on dim_date"
+      ],
+      "shared_hit": 9534,
+      "shared_read": 0,
+      "rows": 25
+    },
+    "q2_top_clientes": {
+      "median_ms": 340.907,
+      "min_ms": 327.589,
+      "max_ms": 421.597,
+      "scans": [
+        "Seq Scan on fact_sales"
+      ],
+      "shared_hit": 9499,
+      "shared_read": 0,
+      "rows": 20
+    },
+    "q3_top_produtos": {
+      "median_ms": 780.822,
+      "min_ms": 708.614,
+      "max_ms": 937.742,
+      "scans": [
+        "Seq Scan on fact_sales",
+        "Seq Scan on dim_product"
+      ],
+      "shared_hit": 9619,
+      "shared_read": 0,
+      "rows": 20
+    },
+    "q4_tendencia_cancelamentos": {
+      "median_ms": 6.244,
+      "min_ms": 5.934,
+      "max_ms": 15.435,
+      "scans": [
+        "Seq Scan on fact_sales_cancelled"
+      ],
+      "shared_hit": 226,
+      "shared_read": 0,
+      "rows": 25
+    },
+    "q5_kpi_de_um_cliente": {
+      "median_ms": 9.184,
+      "min_ms": 8.781,
+      "max_ms": 18.359,
+      "scans": [
+        "Index Scan on dim_customer using dim_customer_pkey",
+        "Index Only Scan on fact_sales using idx_fact_sales_customer_cover"
+      ],
+      "shared_hit": 72,
+      "shared_read": 0,
+      "rows": 1
+    },
+    "q6_receita_de_um_mes": {
+      "median_ms": 23.085,
+      "min_ms": 21.849,
+      "max_ms": 36.837,
+      "scans": [
+        "Index Only Scan on fact_sales using idx_fact_sales_date_cover"
+      ],
+      "shared_hit": 246,
+      "shared_read": 0,
+      "rows": 1
+    }
+  },
+  "write_cost": {
+    "reload_fact_sales_seconds_baseline": 242.56,
+    "reload_fact_sales_seconds_with_indexes": 241.01
+  }
+}

@@ -7,6 +7,54 @@ Histórico completo de decisões, bugs encontrados/corrigidos e resultados reais
 cada execução: [`docs/HISTORICO.md`](docs/HISTORICO.md). Este arquivo resume apenas
 o que mudou, versão a versão.
 
+## [2.2.0] — 2026-11-10
+
+### Added
+
+- **Modelo físico SQLite explícito** (`data-platform/warehouse/schema_sqlite.sql`):
+  PK em todas as tabelas, 4 FKs em `fact_sales`, `UNIQUE`, `NOT NULL`, `CHECK` de
+  domínio, índices e a view `vw_customer_kpis` (antes só no PostgreSQL). Validado na
+  carga completa do Online Retail II sem nenhuma violação.
+- `etl_load_audit` (SQLite e PostgreSQL): trilha da carga com SHA-256 da origem e
+  contagens para reconciliação.
+- `data-platform/governance/`: fixture sintética determinística, engenharia reversa
+  (PRAGMA / `pg_catalog` → JSON/DBML/Mermaid), schema diff classificado com
+  aprovações e exit 1, gerador/validador do dicionário, pseudonimização HMAC +
+  k-anonimato, laboratório PostgreSQL descartável e benchmark com
+  `EXPLAIN (ANALYZE, BUFFERS)`.
+- `docs/data-governance/`: modelos conceitual/lógico/físico, diagramas versionados,
+  normalização, padrões de nomes, dicionário (50 colunas, gerado), glossário,
+  catálogo, linhagem, engenharia reversa e ferramenta CASE (`@dbml/cli` 3.14.1),
+  controle de mudanças, CR-001, checklist, rollback, classificação, RIPD
+  simplificado, matriz de acesso, retenção, benchmark, tickets/backlog de
+  laboratório, rastreabilidade, caso técnico e Q&A de entrevista.
+- `docs/adr/ADR-004-dimensional-model.md`.
+- `docs/security/`: STRIDE, registro de riscos, runbook de incidentes, avaliação de
+  vulnerabilidades, mapeamento ISO 27001 / NIST CSF 2.0 / LGPD / GDPR.
+- `data-platform/warehouse/migrations/postgres/CR-001_*` (up/down idempotentes),
+  `security/roles_postgres.sql` (menor privilégio), `dml_examples.sql`,
+  `performance/queries.sql`; `.sqlfluff`.
+- 50 testes novos (ETL fixture, qualidade, dicionário, engenharia reversa, drift,
+  privacidade, 6 contra PostgreSQL 16).
+- CI: jobs `data-model-postgres` e `security` (pip-audit + Trivy).
+
+### Changed
+
+- ETL aplica o DDL explícito com `PRAGMA foreign_keys=ON`, carrega dimensões antes
+  dos fatos, roda `foreign_key_check`, aceita `--fixture/--db-path/--raw` e
+  **retorna 1 se uma regra crítica falhar** (antes imprimia "[OK]" de qualquer forma).
+- `quality/checks.py`: 7 → 30 regras com severidade (critical/warning), limiar de
+  volume parametrizável, abertura somente leitura, reconciliação origem→warehouse e
+  anti-double-counting; catálogo em `docs/data-governance/quality-rules.yaml`.
+- CI `data-platform`: deixa de **pular** os checks; lint SQL, testes, ETL com fixture,
+  schema drift e `export_dictionary.py --check`.
+- `schema_postgres.sql`: + `etl_load_audit` (aditivo).
+
+### Security
+
+- `pyarrow` 22.0.0 → 23.0.1 (PYSEC-2026-113, apontado pelo pip-audit).
+- Dockerfiles da API e do web passam a rodar como usuário `node` (Trivy DS-0002).
+
 ## [2.1.0] — 2026-10-07
 
 ### Added
